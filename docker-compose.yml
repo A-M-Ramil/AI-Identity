@@ -1,0 +1,60 @@
+services:
+  # ---------------------------------------------------------
+  # Service 1: The Judge (Ethereum Blockchain)
+  # ---------------------------------------------------------
+  anvil:
+    container_name: thesis-blockchain
+    image: ghcr.io/foundry-rs/foundry:latest
+    ports:
+      - "8545:8545"
+    command: anvil --host 0.0.0.0 --block-time 1
+
+  # ---------------------------------------------------------
+  # Service 2: The Agent (ACA-Py)
+  # ---------------------------------------------------------
+  acapy:
+    container_name: thesis-agent
+    image: bcgovimages/aries-cloudagent:py36-1.16-1_0.7.0
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    environment:
+      - ACAPY_LABEL=Alice_Agent
+    command: >
+      start
+      --label "Alice_Agent"
+      --inbound-transport http 0.0.0.0 8001
+      --outbound-transport http
+      --endpoint http://localhost:8001
+      --admin 0.0.0.0 8000
+      --admin-insecure-mode
+      --wallet-type indy
+      --wallet-name alice_wallet
+      --wallet-key insecure_secret_key
+      --auto-provision
+      --no-ledger
+      --log-level info
+  # ---------------------------------------------------------
+  # Service 3: The Database
+  # ---------------------------------------------------------
+  wallet-db:
+    container_name: thesis-wallet-db
+    image: postgres:15
+    environment:
+      POSTGRES_USER: acapy_user
+      POSTGRES_PASSWORD: acapy_password
+      POSTGRES_DB: cloudagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - wallet-data:/var/lib/postgresql/data
+  ipfs:
+    image: ipfs/kubo:latest
+    ports:
+      - "4001:4001"
+      - "5001:5001" # API Port (We will use this)
+      - "8080:8080" # Gateway Port
+    environment:
+      - IPFS_PROFILE=server
+volumes:
+  wallet-data:
