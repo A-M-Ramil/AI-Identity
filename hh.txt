@@ -1,39 +1,80 @@
 signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)  
-        raw_tx = None
-        if hasattr(signed_tx, "rawTransaction"):
-            raw_tx = signed_tx.rawTransaction
-        elif hasattr(signed_tx, "raw_transaction"):
-            raw_tx = signed_tx.raw_transaction
-        elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
-            raw_tx = signed_tx["rawTransaction"]
-        else:
-            # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
-            try:
-                raw_tx = signed_tx[0]
-            except:
-                pass
+raw_tx = None
+if hasattr(signed_tx, "rawTransaction"):
+    raw_tx = signed_tx.rawTransaction
+elif hasattr(signed_tx, "raw_transaction"):
+    raw_tx = signed_tx.raw_transaction
+elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
+    raw_tx = signed_tx["rawTransaction"]
+else:
+    # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
+    try:
+        raw_tx = signed_tx[0]
+    except:
+        pass
 
-        if raw_tx is None:
-            raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
+if raw_tx is None:
+    raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
 
-        # Send to Blockchain
-        tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-
+# Send to Blockchain
+tx_hash = w3.eth.send_raw_transaction(raw_tx)
+receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
 
 
-R38u5dR6bvURJthBnURUKP-->DID
-E6rPnDb4N7oLDuVww5nWrihbJ1bpn79GJE6NYeDcFWoz-->Verkey
+
+========================================================================
+
+
+https://test.bcovrin.vonx.io/--->BCovrin Test 
+
+fb96a505-8588-4eec-8cd3-36fa15bafd84-->connid
+W2VDZ7Nw2jM8GBZFA5WwkQ-->DID
+GpZKxETxhmMYN4tk1k2yM8r3g4DkaLjJyM9oeMWdv4Nr-->Verkey
 QmbhnoFH5y4KTXum8dkNwcPESd2AS7y2d3PX9Gr1M61p9F-->p1 ipfs
 QmcWTJ6RVAv8YTM7AYburrczUbf7uE3Tc3k3a5sKgpwyKR--->p3 ipfs
 
 
-did:sov:agent:c25b9fa0-->agent did
+AV42adsXQHsTignhscebG7-->agent did
 
 
+0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB--> AgentWallet Addr
 
-0x851356ae760d987E095750cCeb3bC6014560891C--> AgentWallet Addr
+
+"schema_id": "QhrGzjqybQmNQzoaXzFn4z:2:defi_trading_license:1.0",
+"credential_definition_id": "QhrGzjqybQmNQzoaXzFn4z:3:CL:3085369:defitrader_v1"
 
 
+"schema_id": "QhrGzjqybQmNQzoaXzFn4z:2:personal_assistant_id:1.0",
+"credential_definition_id": "QhrGzjqybQmNQzoaXzFn4z:3:CL:3085453:personv2"
+
+"schema_id": "QhrGzjqybQmNQzoaXzFn4z:2:medical_proxy_auth:1.0",
+credential_definition_id": "QhrGzjqybQmNQzoaXzFn4z:3:CL:3085454:medical_v2
+
+
+{
+  "schema_name": "defi_trading_license",
+  "schema_version": "1.0",
+  "attributes": ["name", "role", "license_id", "expiration_date"]
+}
+
+{
+  "schema_name": "personal_assistant_id",
+  "schema_version": "1.0",
+  "attributes": ["name", "assistant_id", "access_level", "expiration_date"]
+}
+
+{
+  "schema_name": "medical_proxy_auth",
+  "schema_version": "1.0",
+  "attributes": ["patient_name", "proxy_name", "authorization_id", "valid_until"]
+}
+
+{
+  "schema_id": "QhrGzjqybQmNQzoaXzFn4z:2:medical_proxy_auth:1.0",
+  "tag": "medical_v1",
+  "support_revocation": false
+}
+
+
+===========================================================================

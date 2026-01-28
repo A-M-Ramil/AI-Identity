@@ -10,51 +10,49 @@ services:
     command: anvil --host 0.0.0.0 --block-time 1
 
   # ---------------------------------------------------------
-  # Service 2: The Agent (ACA-Py)
+  # Service 2: The Agent (ACA-Py) - NOW USING SQLITE
   # ---------------------------------------------------------
   acapy:
     container_name: thesis-agent
-    image: bcgovimages/aries-cloudagent:py36-1.16-1_0.7.0
+    image: ghcr.io/openwallet-foundation/acapy-agent:py3.12-1.2.0
     ports:
       - "8000:8000"
       - "8001:8001"
     environment:
-      - ACAPY_LABEL=Alice_Agent
-    command: >
-      start
-      --label "Alice_Agent"
-      --inbound-transport http 0.0.0.0 8001
-      --outbound-transport http
-      --endpoint http://localhost:8001
-      --admin 0.0.0.0 8000
-      --admin-insecure-mode
-      --wallet-type indy
-      --wallet-name alice_wallet
-      --wallet-key insecure_secret_key
-      --auto-provision
-      --no-ledger
-      --log-level info
+      # --- CONNECT TO PUBLIC LEDGER ---
+      - ACAPY_GENESIS_URL=http://test.bcovrin.vonx.io/genesis
+      - ACAPY_WALLET_SEED=my_thesis_demo_agent_seed_000001
+      
+      # --- STANDARD CONFIG ---
+      - ACAPY_ENDPOINT=https://unloveable-macromolecular-leif.ngrok-free.dev
+      - ACAPY_LABEL=ThesisAgent
+      - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8001"]]
+      - ACAPY_OUTBOUND_TRANSPORT=["http"]
+      - ACAPY_ADMIN=["0.0.0.0", "8000"]
+      - ACAPY_ADMIN_INSECURE_MODE=true
+      
+      # --- WALLET CONFIG ---
+      - ACAPY_WALLET_TYPE=askar
+      - ACAPY_WALLET_NAME=thesis_wallet
+      - ACAPY_WALLET_KEY=insecure_secret_key
+      - ACAPY_AUTO_PROVISION=true
+      
+      # --- AUTOMATION ---
+      - ACAPY_AUTO_ACCEPT_INVITES=true
+      - ACAPY_AUTO_ACCEPT_REQUESTS=true
+      - ACAPY_AUTO_VERIFY_PRESENTATION=true
+      - ACAPY_LOG_LEVEL=info
+      - ACAPY_PRESERVE_EXCHANGE_RECORDS=true
+    command: start
+
   # ---------------------------------------------------------
-  # Service 3: The Database
+  # Service 3: IPFS
   # ---------------------------------------------------------
-  wallet-db:
-    container_name: thesis-wallet-db
-    image: postgres:15
-    environment:
-      POSTGRES_USER: acapy_user
-      POSTGRES_PASSWORD: acapy_password
-      POSTGRES_DB: cloudagent
-    ports:
-      - "5432:5432"
-    volumes:
-      - wallet-data:/var/lib/postgresql/data
   ipfs:
     image: ipfs/kubo:latest
     ports:
       - "4001:4001"
-      - "5001:5001" # API Port (We will use this)
-      - "8080:8080" # Gateway Port
+      - "5001:5001"
+      - "8080:8080"
     environment:
       - IPFS_PROFILE=server
-volumes:
-  wallet-data:

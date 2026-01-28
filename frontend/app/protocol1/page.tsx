@@ -1,236 +1,220 @@
 "use client";
 import { useState } from "react";
 import { 
-  ShieldCheck, 
-  Fingerprint, 
-  Database, 
-  Server, 
-  CheckCircle, 
-  AlertCircle, 
-  Terminal, 
-  Copy, 
-  ExternalLink 
+  Wallet, 
+  ArrowRight, 
+  CheckCircle2, 
+  QrCode,
+  Smartphone,
+  Fingerprint,
+  FileBadge,
+  Key,
+  Link as LinkIcon,
+  Globe
 } from "lucide-react";
 
+declare global { interface Window { ethereum?: any; } }
+
 export default function Protocol1Page() {
-  // State
-  const [govID, setGovID] = useState("");
+  // STATE
+  const [metaMaskAddress, setMetaMaskAddress] = useState("");
+  
+  const [govId, setGovId] = useState("");
+  const [fullName, setFullName] = useState("");
+  
+  // Real Data from ACA-Py
+  const [did, setDid] = useState("");
+  const [verkey, setVerkey] = useState("");
+  const [ipfsCid, setIpfsCid] = useState("");
+  const [txHash, setTxHash] = useState("");
+  
+  const [invitationUrl, setInvitationUrl] = useState("");
+  const [connectionId, setConnectionId] = useState("");
+  const [qrCodeData, setQrCodeData] = useState(""); 
+  
   const [loading, setLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState("");
-  const [showLogs, setShowLogs] = useState(false);
+  const [connected, setConnected] = useState(false);
 
-  // Simulation Steps for the UI Progress Bar
-  const steps = [
-    { id: 1, label: "Biometric Liveness (M4-M5)", icon: Fingerprint },
-    { id: 2, label: "SSI Key Generation (M6-M7)", icon: ShieldCheck },
-    { id: 3, label: "IPFS Storage (M8)", icon: Database },
-    { id: 4, label: "Blockchain Anchor (M9-M11)", icon: Server },
-  ];
+  // 1. METAMASK
+  const connectMetaMask = async () => {
+    if (!window.ethereum) return alert("Install MetaMask!");
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      setMetaMaskAddress(accounts[0]);
+    } catch (e: any) { alert(e.message); }
+  };
 
-  const registerIdentity = async () => {
-    if (!govID) return;
+  // 2. GENERATE IDENTITY (CALLS BACKEND)
+  const generateIdentity = async () => {
+    if (!metaMaskAddress || !govId) return alert("Connect Wallet and enter Gov ID.");
     setLoading(true);
-    setError("");
-    setResult(null);
-    setCurrentStep(1); // Start Bio Check
 
     try {
-      // Simulate Step 1 Visual (Biometrics)
-      await new Promise(r => setTimeout(r, 800)); 
-      setCurrentStep(2); // Start ACA-Py
+        const response = await fetch("http://127.0.0.1:8002/protocol1/create-ssi-identity", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ gov_id: govId, name: fullName })
+        });
+        const data = await response.json();
 
-      const response = await fetch("http://127.0.0.1:8002/protocol1/create-ssi-identity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gov_id: govID }),
-      });
-
-      const data = await response.json();
-
-      if (data.status === "success") {
-        setCurrentStep(3); // IPFS done (backend returns fast)
-        await new Promise(r => setTimeout(r, 600)); 
-        setCurrentStep(4); // Chain done
-        setResult(data);
-      } else {
-        throw new Error(data.detail || "Registration Failed");
-      }
-    } catch (err: any) {
-      setError(err.message);
-      setCurrentStep(0);
+        if (data.status === "success") {
+            setDid(data.ssi_did);
+            setVerkey(data.verkey);
+            setIpfsCid(data.ipfs_cid);
+            setTxHash(data.blockchain_tx);
+        } else {
+            alert("Generation Failed: " + JSON.stringify(data));
+        }
+    } catch (e: any) {
+        alert("Error: " + e.message);
     } finally {
+        setLoading(false);
+    }
+  };
+
+  // 3. MOBILE LINK
+  const connectSSIWallet = async () => {
+    if (!did) return alert("Generate your DID first!");
+    setLoading(true);
+    try {
+      const response = await fetch("http://127.0.0.1:8002/protocol1/connect-wallet", { method: "POST" });
+      const data = await response.json();
+      
+      setInvitationUrl(data.invitation_url);
+      setConnectionId(data.connection_id);
+      setQrCodeData(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.invitation_url)}`);
+      
+      pollConnection(data.connection_id);
+    } catch (e: any) {
+      alert("Error: " + e.message);
       setLoading(false);
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert("Copied to clipboard!");
+  const pollConnection = (connId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:8002/protocol1/check-connection/${connId}`);
+        const data = await res.json();
+        
+        if (data.connected) {
+           clearInterval(interval);
+           setConnected(true);
+           setLoading(false);
+           
+           // LINK TO METAMASK IN BACKEND
+           await fetch("http://127.0.0.1:8002/protocol1/link-wallet", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({ 
+                 connection_id: connId, 
+                 wallet_address: metaMaskAddress,
+                 did: did
+               })
+           });
+        }
+      } catch (e) { console.error(e); }
+    }, 2000);
   };
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-slate-200 p-8 font-sans selection:bg-cyan-500/30">
-      
-      {/* HEADER */}
-      <header className="max-w-4xl mx-auto mb-12 border-b border-slate-800 pb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="h-2 w-2 bg-cyan-500 rounded-full animate-pulse"/>
-          <h1 className="text-sm font-mono text-cyan-500 tracking-widest uppercase">Protocol 1</h1>
-        </div>
-        <h2 className="text-3xl font-bold text-white tracking-tight">Self-Sovereign Identity Registration</h2>
-        <p className="text-slate-400 mt-2 text-lg">
-          Anchor a Human Identity to the Blockchain using ACA-Py and IPFS.
-        </p>
+    <main className="min-h-screen bg-[#09090b] text-slate-200 p-8 font-sans selection:bg-indigo-500/30">
+      <header className="max-w-6xl mx-auto mb-8 border-b border-slate-800 pb-4">
+        <h1 className="text-sm font-mono text-indigo-500 tracking-widest uppercase mb-2">Protocol 1 (Full Implementation)</h1>
+        <h2 className="text-3xl font-bold text-white">Identity Nexus</h2>
       </header>
 
-      <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12">
         
-        {/* LEFT COLUMN: FORM */}
+        {/* LEFT: IDENTITY CREATION */}
         <div className="space-y-6">
-          <div className="bg-[#18181b] border border-slate-800 rounded-xl p-6 shadow-2xl">
-            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-              <Fingerprint className="w-5 h-5 text-cyan-400" />
-              Identity Input
-            </h3>
-            
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Government ID / Passport No.</label>
-                <input 
-                  type="text" 
-                  value={govID}
-                  onChange={(e) => setGovID(e.target.value)}
-                  placeholder="e.g. A-1234567-X"
-                  className="w-full bg-black/50 border border-slate-700 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all placeholder:text-slate-600"
-                />
-              </div>
-
-              <button 
-                onClick={registerIdentity}
-                disabled={loading || !govID}
-                className={`w-full py-4 rounded-lg font-bold text-sm tracking-wide transition-all
-                  ${loading 
-                    ? "bg-slate-800 text-slate-500 cursor-not-allowed" 
-                    : "bg-cyan-600 hover:bg-cyan-500 text-white shadow-[0_0_20px_-5px_rgba(8,145,178,0.5)]"
-                  }`}
-              >
-                {loading ? "PROCESSING CRYPTOGRAPHY..." : "REGISTER IDENTITY (M1-M11)"}
-              </button>
-            </div>
+          
+          {/* A. FINANCIAL */}
+          <div className="bg-[#18181b] border border-slate-800 rounded-xl p-5">
+             <h3 className="text-white font-bold mb-3 flex items-center gap-2">
+               <Wallet className="w-5 h-5 text-indigo-400" /> 1. Financial Anchor
+             </h3>
+             {!metaMaskAddress ? (
+               <button onClick={connectMetaMask} className="w-full py-3 bg-orange-700 hover:bg-orange-600 text-white font-bold rounded">Connect MetaMask</button>
+             ) : (
+               <div className="bg-black/50 p-3 rounded border border-slate-700 text-xs font-mono text-green-400">{metaMaskAddress}</div>
+             )}
           </div>
 
-          {/* PROGRESS STEPS */}
-          <div className="bg-[#18181b] border border-slate-800 rounded-xl p-6">
-            <h4 className="text-xs font-mono text-slate-500 mb-4 uppercase">System Processes</h4>
-            <div className="space-y-4">
-              {steps.map((step) => {
-                const Icon = step.icon;
-                const isActive = currentStep === step.id;
-                const isCompleted = currentStep > step.id || result;
-                
-                return (
-                  <div key={step.id} className={`flex items-center gap-3 ${isCompleted || isActive ? "opacity-100" : "opacity-30"}`}>
-                    <div className={`p-2 rounded-full ${isCompleted ? "bg-green-500/20 text-green-400" : isActive ? "bg-cyan-500/20 text-cyan-400 animate-pulse" : "bg-slate-800 text-slate-500"}`}>
-                      {isCompleted ? <CheckCircle className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+          {/* B. ATTRIBUTES */}
+          <div className="bg-[#18181b] border border-slate-800 rounded-xl p-5">
+             <h3 className="text-white font-bold mb-3 flex items-center gap-2">
+               <FileBadge className="w-5 h-5 text-indigo-400" /> 2. Attributes
+             </h3>
+             <div className="space-y-3">
+                <input type="text" placeholder="Full Name" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full bg-black/50 border border-slate-700 rounded p-3 text-xs outline-none text-white"/>
+                <input type="text" placeholder="Gov ID / Passport" value={govId} onChange={e => setGovId(e.target.value)} className="w-full bg-black/50 border border-slate-700 rounded p-3 text-xs outline-none text-white"/>
+                <button onClick={generateIdentity} disabled={loading || !!did} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded">
+                  {loading && !did ? "GENERATING ON ACA-PY..." : "GENERATE DID & KEYS"}
+                </button>
+             </div>
+          </div>
+
+          {/* C. DID OUTPUT (REAL) */}
+          {did && (
+            <div className="bg-[#18181b] border border-indigo-500/30 rounded-xl p-5 animate-in fade-in">
+              <h3 className="text-white font-bold mb-3 flex items-center gap-2">
+                <Fingerprint className="w-5 h-5 text-indigo-400" /> 3. Sovereign Identity (ACA-Py)
+              </h3>
+              <div className="space-y-2 text-[10px] font-mono">
+                 <div className="bg-black/50 p-2 rounded">
+                    <span className="text-slate-500 block">DID (Decentralized Identifier)</span>
+                    <span className="text-indigo-300 break-all">{did}</span>
+                 </div>
+                 <div className="bg-black/50 p-2 rounded">
+                    <span className="text-slate-500 block">Verkey (Public Key)</span>
+                    <span className="text-slate-300 break-all">{verkey}</span>
+                 </div>
+                 <div className=" gap-5">
+                    <div className="bg-black/50 p-2 rounded">
+                       <span className="text-slate-500 block flex gap-1"><Globe className="w-3 h-3"/> IPFS CID</span>
+                       <span className="text-blue-300 truncate">{ipfsCid}</span>
                     </div>
-                    <span className={`text-sm ${isCompleted ? "text-green-400" : isActive ? "text-cyan-300" : "text-slate-500"}`}>
-                      {step.label}
-                    </span>
-                  </div>
-                );
-              })}
+                    <div className="bg-black/50 mt-2 p-2 rounded">
+                       <span className="text-slate-500 block">Blockchain TX</span>
+                       <span className="text-slate-300 truncate">{txHash}</span>
+                    </div>
+                 </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* RIGHT COLUMN: RESULT CARD */}
-        <div className="relative">
-          {error && (
-            <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-lg flex items-center gap-3 text-red-200">
-              <AlertCircle className="w-5 h-5" />
-              <span className="text-sm font-mono">{error}</span>
-            </div>
-          )}
-
-          {result ? (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-              {/* THE DIGITAL ID CARD */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-700 rounded-xl shadow-2xl p-6 group hover:border-cyan-500/50 transition-colors">
-                
-                {/* Holographic Top Bar */}
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 via-purple-500 to-cyan-500" />
-                
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h3 className="text-xl font-bold text-white tracking-tight">Decentralized ID</h3>
-                    <span className="text-xs font-mono text-green-400 flex items-center gap-1 mt-1">
-                      <CheckCircle className="w-3 h-3" /> Anchored on Ethereum
-                    </span>
-                  </div>
-                  <div className="h-10 w-10 bg-white p-1 rounded-md">
-                    {/* Placeholder QR Code */}
-                    <div className="w-full h-full bg-slate-900 grid grid-cols-4 grid-rows-4 gap-[1px]">
-                       {[...Array(16)].map((_,i) => <div key={i} className={`bg-black ${Math.random()>0.5 ? 'opacity-100':'opacity-0'}`} />)}
+        {/* RIGHT: AGENT LINK */}
+        <div className="space-y-6">
+           <div className={`h-full border border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center ${connected ? "bg-green-900/10 border-green-500/50" : "bg-[#18181b]"}`}>
+              <Smartphone className="w-12 h-12 text-indigo-400 mb-4" />
+              <h3 className="text-white font-bold mb-4">4. Link Mobile Agent</h3>
+              
+              {!did ? (
+                 <p className="text-slate-500 text-sm">Complete Steps 1-3 first.</p>
+              ) : (
+                 !invitationUrl ? (
+                    <button onClick={connectSSIWallet} disabled={loading} className="px-8 py-3 bg-indigo-600 text-white font-bold rounded">
+                      {loading ? "Creating..." : "Create Mobile Link"}
+                    </button>
+                 ) : (
+                    <div className="text-center animate-in zoom-in">
+                        {!connected ? (
+                           <div className="bg-white p-4 rounded-xl inline-block mb-4">
+                              <img src={qrCodeData} alt="QR" className="w-48 h-48" />
+                           </div>
+                        ) : (
+                           <div className="mb-6">
+                              <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-2" />
+                              <h3 className="text-xl font-bold text-white">SYNC COMPLETE</h3>
+                           </div>
+                        )}
+                        <div className="text-[10px] font-mono text-slate-500">Connection ID: {connectionId}</div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">DID (Identity)</label>
-                    <div className="flex items-center gap-2 bg-black/40 p-2 rounded border border-slate-800 group-hover:border-cyan-500/30 transition-colors">
-                      <code className="text-xs text-cyan-300 font-mono truncate flex-1">{result.ssi_did}</code>
-                      <button onClick={() => copyToClipboard(result.ssi_did)} className="text-slate-500 hover:text-white"><Copy className="w-3 h-3"/></button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Verkey (Public Key)</label>
-                    <div className="flex items-center gap-2 bg-black/40 p-2 rounded border border-slate-800">
-                      <code className="text-xs text-purple-300 font-mono truncate flex-1">{result.verkey}</code>
-                      <button onClick={() => copyToClipboard(result.verkey)} className="text-slate-500 hover:text-white"><Copy className="w-3 h-3"/></button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 pt-2">
-                    <a href={result.view_url} target="_blank" className="flex items-center justify-center gap-2 text-xs bg-slate-800 hover:bg-slate-700 py-2 rounded border border-slate-700 transition-all text-slate-300">
-                      <Database className="w-3 h-3" /> View IPFS
-                      <ExternalLink className="w-3 h-3 opacity-50" />
-                    </a>
-                    <div className="flex flex-col items-center justify-center bg-slate-800/50 rounded border border-slate-800">
-                      <span className="text-[9px] text-slate-500 uppercase">Block Hash</span>
-                      <span className="text-[10px] font-mono text-slate-300">{result.blockchain_tx.slice(0,8)}...</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Toggle Logs */}
-              <button 
-                onClick={() => setShowLogs(!showLogs)}
-                className="mt-6 flex items-center gap-2 text-xs text-slate-500 hover:text-cyan-400 transition-colors w-full justify-center"
-              >
-                <Terminal className="w-3 h-3" />
-                {showLogs ? "Hide Supervisor Logs" : "Show Supervisor Logs"}
-              </button>
-
-              {showLogs && (
-                <div className="mt-4 p-4 bg-black border border-slate-800 rounded-lg font-mono text-[10px] text-green-500 h-48 overflow-y-auto">
-                  <pre>{JSON.stringify(result, null, 2)}</pre>
-                </div>
+                 )
               )}
-
-            </div>
-          ) : (
-            /* EMPTY STATE PLACEHOLDER */
-            <div className="h-full border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center p-12 text-slate-600">
-              <ShieldCheck className="w-16 h-16 mb-4 opacity-20" />
-              <p className="text-sm">Ready to Register</p>
-              <p className="text-xs mt-1">Waiting for user input...</p>
-            </div>
-          )}
+           </div>
         </div>
 
       </div>

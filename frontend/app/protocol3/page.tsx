@@ -12,79 +12,81 @@ import {
   ArrowRight,
   Cpu,
   Fingerprint,
-  Link
+  Link,
+  Smartphone
 } from "lucide-react";
 
 export default function Protocol3Page() {
   // State
   const [issuerDid, setIssuerDid] = useState("did:sov:2wJPyULfLLnYTEFYzByfUR");
-  const [subjectDid, setSubjectDid] = useState("");
+  
+  // CRITICAL: This must be the Connection ID from Protocol 1
+  const [subjectDid, setSubjectDid] = useState(""); 
+  
+  // Credential Data
+  const [holderName, setHolderName] = useState("Ahammod Munim Ramil");
+  const [holderRole, setHolderRole] = useState("Senior DeFi Trader");
   const [credType, setCredType] = useState("DeFi Trading License");
   const [expiry, setExpiry] = useState(new Date().toISOString().split('T')[0]);
   
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0); // 0=Draft, 1=Signing, 2=Anchoring, 3=Complete
-  const [credential, setCredential] = useState<any>(null);
-  const [txHash, setTxHash] = useState("");
+  const [resultData, setResultData] = useState<any>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
   const addLog = (msg: string) => setLogs(prev => [`> ${msg}`, ...prev]);
 
   // --- MOCK PREVIEW ---
-  // This updates live as the user types, showing them what they are about to sign
   const previewJson = {
     "@context": ["https://www.w3.org/2018/credentials/v1"],
     "type": ["VerifiableCredential", credType.replace(/\s/g, "")],
     "issuer": issuerDid,
     "issuanceDate": new Date().toISOString().split('T')[0],
-    "expirationDate": expiry,
     "credentialSubject": {
-      "id": subjectDid || "did:sov:agent:...",
-      "licenseType": "UNRESTRICTED_DEFI_ACCESS",
-      "authorization": "LEVEL_5"
+      "connection_id": subjectDid || "55544330-...",
+      "name": holderName,
+      "role": holderRole,
+      "licenseType": credType
     }
   };
 
   // --- ACTION ---
   const issueCredential = async () => {
-    if (!subjectDid) return alert("Please enter the Agent's DID");
+    if (!subjectDid) return alert("Please enter the Connection ID from Protocol 1");
     
     setLoading(true);
     setStep(1); // SIGNING
-    addLog("Initiating Cryptographic Signature...");
+    addLog("Initiating ACA-Py Issuance Protocol...");
 
     try {
-      // Step 1: Backend Signing
+      // Step 1: Send to Backend
       const response = await fetch("http://127.0.0.1:8002/protocol3/issue-credential", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           issuer_did: issuerDid,
-          subject_did: subjectDid,
+          subject_did: subjectDid, // Sending Connection ID here
           credential_data: {
              type: credType,
+             name: holderName,
+             role: holderRole,
              expiry: expiry,
-             access_level: "Level 5"
           }
         })
       });
       const data = await response.json();
 
       if (data.status === "success") {
-        await new Promise(r => setTimeout(r, 800)); // Visual delay
+        addLog("✅ ACA-Py: Credential Sent to Phone.");
         setStep(2); // ANCHORING
-        addLog("Signature Valid. Anchoring Hash to Ledger...");
-        
-        // In a real flow, the backend does this in one go, but we simulate the progress
-        // The backend *already* did it, so we just show the result
         await new Promise(r => setTimeout(r, 800)); 
         
-        setCredential(data.credential);
-        setTxHash(data.tx_hash);
+        addLog("✅ Blockchain: Hash Anchored to Ethereum.");
+        setResultData(data);
         setStep(3); // DONE
-        addLog(`✅ SUCCESS: Credential Issued! TX: ${data.tx_hash}`);
+        addLog(`🎉 PROTOCOL COMPLETE. TX: ${data.tx_hash}`);
       } else {
-        throw new Error(data.reason);
+        throw new Error(data.detail || "Issuance Failed");
       }
     } catch (e: any) {
       addLog(`❌ ERROR: ${e.message}`);
@@ -105,7 +107,7 @@ export default function Protocol3Page() {
         </div>
         <h2 className="text-3xl font-bold text-white tracking-tight">Credential Issuance</h2>
         <p className="text-slate-400 mt-2 text-lg">
-          Issue a Verifiable Credential (VC) to an authorized AI Agent.
+          Issue a Schema-Compliant Credential to the Wallet & Anchor to Chain.
         </p>
       </header>
 
@@ -119,24 +121,51 @@ export default function Protocol3Page() {
              </div>
 
              <h3 className="text-white font-bold mb-6 flex items-center gap-2">
-               <FileJson className="w-5 h-5 text-purple-400" /> Credential Draft
+               <FileJson className="w-5 h-5 text-purple-400" /> Credential Details
              </h3>
 
              <div className="space-y-4 relative z-10">
+               {/* ISSUER */}
                <div>
-                 <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Issuer (You)</label>
+                 <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Issuer DID (You)</label>
                  <input 
                    type="text" value={issuerDid} onChange={e => setIssuerDid(e.target.value)}
-                   className="w-full bg-black/50 border border-slate-700 text-slate-300 font-mono text-xs rounded p-3 focus:border-purple-500 outline-none"
+                   className="w-full bg-black/50 border border-slate-700 text-slate-500 font-mono text-xs rounded p-3 focus:border-purple-500 outline-none"
+                   
                  />
                </div>
 
+               {/* RECIPIENT - UPDATED LABEL */}
                <div>
-                 <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Subject (Agent DID)</label>
+                 <label className="text-[10px] uppercase text-purple-400 font-bold tracking-wider flex justify-between">
+                    <span>Recipient Connection ID</span>
+                    <span className="text-[9px] opacity-70">From Protocol 1</span>
+                 </label>
                  <input 
-                   type="text" placeholder="Paste Agent DID here..." value={subjectDid} onChange={e => setSubjectDid(e.target.value)}
+                   type="text" 
+                   placeholder="e.g. 55544330-3219-4ecf-bc65-..." 
+                   value={subjectDid} 
+                   onChange={e => setSubjectDid(e.target.value)}
                    className="w-full bg-black/50 border border-slate-700 text-purple-300 font-mono text-xs rounded p-3 focus:border-purple-500 outline-none"
                  />
+               </div>
+
+               {/* ATTRIBUTES */}
+               <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Holder Name</label>
+                    <input 
+                      type="text" value={holderName} onChange={e => setHolderName(e.target.value)}
+                      className="w-full bg-black/50 border border-slate-700 text-white text-xs rounded p-3 outline-none focus:border-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Role</label>
+                    <input 
+                      type="text" value={holderRole} onChange={e => setHolderRole(e.target.value)}
+                      className="w-full bg-black/50 border border-slate-700 text-white text-xs rounded p-3 outline-none focus:border-purple-500"
+                    />
+                  </div>
                </div>
 
                <div className="grid grid-cols-2 gap-4">
@@ -147,8 +176,8 @@ export default function Protocol3Page() {
                       className="w-full bg-black/50 border border-slate-700 text-white text-xs rounded p-3 outline-none"
                     >
                       <option>DeFi Trading License</option>
-                      <option>Medical Proxy Access</option>
-                      <option>Legal Power of Attorney</option>
+                      <option>Personal Assistant ID</option>
+                      <option>Medical Proxy Auth</option>
                     </select>
                  </div>
                  <div>
@@ -170,7 +199,7 @@ export default function Protocol3Page() {
                      ${loading ? "bg-slate-800 text-slate-500" : "bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_-5px_rgba(147,51,234,0.5)]"}
                    `}
                  >
-                   {loading ? "CRYPTOGRAPHIC SIGNING..." : "DIGITALLY SIGN & ISSUE"} <ArrowRight className="w-4 h-4" />
+                   {loading ? "ISSUING CREDENTIAL..." : "ISSUE & ANCHOR"} <ArrowRight className="w-4 h-4" />
                  </button>
                </div>
              </div>
@@ -199,7 +228,7 @@ export default function Protocol3Page() {
           </div>
 
           {/* 2. SUCCESS CERTIFICATE */}
-          {step === 3 && credential && (
+          {step === 3 && resultData && (
              <div className="animate-in zoom-in duration-500 relative">
                 {/* Glowing Border */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl blur opacity-30"></div>
@@ -214,34 +243,41 @@ export default function Protocol3Page() {
                       <h3 className="text-2xl font-bold text-white mb-1">Verifiable Credential</h3>
                       <div className="flex items-center gap-2 text-green-400 text-xs font-mono">
                         <CheckCircle2 className="w-3 h-3" />
-                        <span>Cryptographically Signed & Anchored</span>
+                        <span>Issued & Anchored</span>
                       </div>
                    </div>
 
                    <div className="grid grid-cols-2 gap-6 mb-6">
                       <div className="bg-slate-900/50 p-3 rounded border border-slate-800">
-                         <div className="text-[9px] uppercase text-slate-500 font-bold mb-1">Issued To</div>
-                         <div className="text-[10px] text-purple-300 font-mono truncate">{credential.credentialSubject.id}</div>
+                         <div className="text-[9px] uppercase text-slate-500 font-bold mb-1">Holder Name</div>
+                         <div className="text-[10px] text-purple-300 font-mono truncate">{holderName}</div>
                       </div>
                       <div className="bg-slate-900/50 p-3 rounded border border-slate-800">
                          <div className="text-[9px] uppercase text-slate-500 font-bold mb-1">License</div>
-                         <div className="text-[10px] text-white font-mono">{credential.credentialSubject.licenseType}</div>
+                         <div className="text-[10px] text-white font-mono">{credType}</div>
                       </div>
                    </div>
 
                    <div className="border-t border-slate-800 pt-4 space-y-3">
                       <div className="flex items-center gap-3">
-                         <Fingerprint className="w-4 h-4 text-slate-500" />
+                         <Smartphone className="w-4 h-4 text-green-500" />
                          <div className="flex-1 overflow-hidden">
-                            <div className="text-[9px] text-slate-500 uppercase">Proof (Signature)</div>
-                            <div className="text-[9px] text-slate-400 font-mono truncate">{credential.proof.jws}</div>
+                            <div className="text-[9px] text-slate-500 uppercase">Wallet Delivery</div>
+                            <div className="text-[9px] text-green-400 font-mono">SENT TO PHONE</div>
                          </div>
                       </div>
                       <div className="flex items-center gap-3">
-                         <Link className="w-4 h-4 text-slate-500" />
+                         <Link className="w-4 h-4 text-blue-500" />
+                         <div className="flex-1 overflow-hidden">
+                            <div className="text-[9px] text-slate-500 uppercase">IPFS Metadata</div>
+                            <div className="text-[9px] text-blue-400 font-mono truncate">{resultData.ipfs_cid}</div>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                         <Fingerprint className="w-4 h-4 text-purple-500" />
                          <div className="flex-1 overflow-hidden">
                             <div className="text-[9px] text-slate-500 uppercase">Blockchain Anchor</div>
-                            <div className="text-[9px] text-blue-400 font-mono truncate">{txHash}</div>
+                            <div className="text-[9px] text-purple-400 font-mono truncate">{resultData.tx_hash}</div>
                          </div>
                       </div>
                    </div>
