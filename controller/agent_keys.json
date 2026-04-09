@@ -54,5 +54,29 @@
       "arch": "Transformer-6Baf aw awf",
       "ver": "v2.1.5afwfaf"
     }
+  },
+  "dKKWRrDsocvT8HZCaD9kD": {
+    "private_key": "0f2e595a94c70e45e7e22eca3918d3343f3623c230ee285864208769804b4354",
+    "address": "0xF67ECCe6543ED0C20Fb320a4586A1FC73B9bbb16",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5"
+    }
+  },
+  "5SEUBxQFzErF6bQA2Ns6ox": {
+    "private_key": "26026972b671784a9150c2cebbee55d300823fb9f56988314e24aaec0c89b2f0",
+    "address": "0xDb82fEc1223133B8102818fCAb79F7c64Eb134f1",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5"
+    }
+  },
+  "Bbj3ZtXPpB6AvYuK4vmBzy": {
+    "private_key": "3549117d3ce1aa9cdfe9dc3caafc0f13bba6f3c05f439f2cce2a90728bab121a",
+    "address": "0xCB34Ed8b59A81D79B081b694c26E0D222bb83589",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5"
+    }
   }
 }

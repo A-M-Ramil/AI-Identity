@@ -25,3 +25,23 @@ echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/
 sudo apt update && sudo apt install ngrok
 ngrok config add-authtoken YOUR_TOKEN_HERE
 ngrok http 8001
+
+
+
+
+
+
+
+
+
+
+
+
+
+Issuer API: cd issuer/backend -> uvicorn main:app --reload --port 8002
+
+Verifier API: cd verifier/backend -> uvicorn main:app --reload --port 8012
+
+Issuer UI: cd issuer/frontend -> npm run dev -- -p 3000
+
+Verifier UI: cd verifier/frontend -> npm run dev -- -p 3001

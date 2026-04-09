@@ -28,10 +28,10 @@ receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
 https://test.bcovrin.vonx.io/--->BCovrin Test 
 
-fb96a505-8588-4eec-8cd3-36fa15bafd84-->connid
-W2VDZ7Nw2jM8GBZFA5WwkQ-->DID
-GpZKxETxhmMYN4tk1k2yM8r3g4DkaLjJyM9oeMWdv4Nr-->Verkey
-QmbhnoFH5y4KTXum8dkNwcPESd2AS7y2d3PX9Gr1M61p9F-->p1 ipfs
+20a9e89c-2772-4be9-8745-9fe9ac89f4a1-->connid
+ACMYbwc2vPW2hfpNV55huW-->DID
+2XumjB6oZ6BZ6m5fM8bZSVnTgADg8SBVVbUpT1ziyixt-->Verkey
+QmcLrvpYrNtUmRhdV1NEvMQVTMmm2CUo2mVjAqWyhEbMLn-->p1 ipfs
 QmcWTJ6RVAv8YTM7AYburrczUbf7uE3Tc3k3a5sKgpwyKR--->p3 ipfs
 
 

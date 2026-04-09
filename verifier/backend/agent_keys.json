@@ -1,0 +1,50 @@
+{
+  "2HZmUGJTPAPyNPvvY4h6Y8": {
+    "private_key": "d26d87cd79f8ebb726b3d4bd76ae46baadc0e3a2035225529503643381820943",
+    "address": "0x9aDb450335CECb777BB94864cD74Fe4fD623bfD0",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5"
+    }
+  },
+  "Wr6iYibamRJqemtqvLiZxU": {
+    "private_key": "93476e486373d5f30ed94a47bcd48478bd471570c56fcc42c0f6940fde08edc4",
+    "address": "0x03249973f5EA020eE1f4dF19203e4CeAd3715179",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5"
+    }
+  },
+  "FcesU3WLpGSuwd8ddJeVqS": {
+    "private_key": "abd7315d24fe50d2a37648246cf14dbf50e93f749d299395441b06a28ddb823f",
+    "address": "0x43543eb43E6a5f9a8E31ee1E171511f7608d3233",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5"
+    }
+  },
+  "JAirVR4UfiV4JrYd6K1V7g": {
+    "private_key": "da49002089fcd0467fef634e16fcda40ad04bd71d2f4e02e62c12317eca9b7fe",
+    "address": "0x66CAf6Dd6F2eeB4E95e5723fEd09454774c8Fd44",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5"
+    }
+  },
+  "WVW4VQ3arEmxYamvfCXvBb": {
+    "private_key": "dbccc69e6b780de2b02523e1d7cffe7b37626c08da53978897634af6bc25afd5",
+    "address": "0xF431a86F933Fa7F2d15D04e7B8E11B123Bb34e55",
+    "layer_a": {
+      "arch": "Transformer-6B;l",
+      "ver": "v2.1.5"
+    }
+  },
+  "WYNyHLBZkxCEaTekduCjnK": {
+    "private_key": "f7871361f0824609381f7bd35f1aed8917be7b54effb14f82a93a34326d6e302",
+    "address": "0x80221871960d3B750865739fC4cf6642010b7A71",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5"
+    }
+  }
+}
