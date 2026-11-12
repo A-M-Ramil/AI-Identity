@@ -96,18 +96,27 @@ w3 = Web3(Web3.HTTPProvider(ANVIL_RPC_URL))
 
 CRED_CONFIG = {
     "DeFiTradingLicense": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:defi_trading_license:1.4801",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3160820:tag_4801"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:defi_trading_license:1.1094",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323395:tag_1094"
     },
     "PersonalAssistantID": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:personal_assistant_id:1.4814",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3160822:tag_4814"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:personal_assistant_id:1.1108",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323397:tag_1108"
     },
     "MedicalProxyAuth": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:medical_proxy_auth:1.4827",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3160824:tag_4827"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:medical_proxy_auth:1.1121",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323399:tag_1121"
     }
 }
+def send_tx(tx):
+    signed = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
+    raw = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction")
+    tx_hash = w3.eth.send_raw_transaction(raw)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+    if receipt.status != 1:
+        raise HTTPException(status_code=409,
+            detail=f"Reverted on-chain: {w3.to_hex(tx_hash)}")
+    return tx_hash, receipt
 
 
 def load_contract_data(filename):
@@ -325,27 +334,27 @@ async def register_agent_abcd(req: RegisterABCDRequest):
             'gas': 2000000,
             'gasPrice': w3.to_wei('1', 'gwei')
         })
-        signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)  
-        raw_tx = None
-        if hasattr(signed_tx, "rawTransaction"):
-            raw_tx = signed_tx.rawTransaction
-        elif hasattr(signed_tx, "raw_transaction"):
-            raw_tx = signed_tx.raw_transaction
-        elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
-            raw_tx = signed_tx["rawTransaction"]
-        else:
-            # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
-            try:
-                raw_tx = signed_tx[0]
-            except:
-                pass
+        # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)  
+        # raw_tx = None
+        # if hasattr(signed_tx, "rawTransaction"):
+        #     raw_tx = signed_tx.rawTransaction
+        # elif hasattr(signed_tx, "raw_transaction"):
+        #     raw_tx = signed_tx.raw_transaction
+        # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
+        #     raw_tx = signed_tx["rawTransaction"]
+        # else:
+        #     # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
+        #     try:
+        #         raw_tx = signed_tx[0]
+        #     except:
+        #         pass
 
-        if raw_tx is None:
-            raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
-
+        # if raw_tx is None:
+        #     raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
+        tx_hash, receipt = send_tx(tx)
         # Send to Blockchain
-        tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        # tx_hash = w3.eth.send_raw_transaction(raw_tx)
+        # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
 
         
@@ -782,28 +791,29 @@ async def set_delegation(req: DelegateRequest):
             'gasPrice': w3.to_wei('1', 'gwei')
         })
         
-        signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
+        # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
           
-        raw_tx = None
-        if hasattr(signed_tx, "rawTransaction"):
-            raw_tx = signed_tx.rawTransaction
-        elif hasattr(signed_tx, "raw_transaction"):
-            raw_tx = signed_tx.raw_transaction
-        elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
-            raw_tx = signed_tx["rawTransaction"]
-        else:
-            # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
-            try:
-                raw_tx = signed_tx[0]
-            except:
-                pass
+        # raw_tx = None
+        # if hasattr(signed_tx, "rawTransaction"):
+        #     raw_tx = signed_tx.rawTransaction
+        # elif hasattr(signed_tx, "raw_transaction"):
+        #     raw_tx = signed_tx.raw_transaction
+        # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
+        #     raw_tx = signed_tx["rawTransaction"]
+        # else:
+        #     # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
+        #     try:
+        #         raw_tx = signed_tx[0]
+        #     except:
+        #         pass
 
-        if raw_tx is None:
-            raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
+        # if raw_tx is None:
+        #     raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
 
-        # Send to Blockchain
-        tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        # # Send to Blockchain
+        # tx_hash = w3.eth.send_raw_transaction(raw_tx)
+        # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        tx_hash, receipt = send_tx(tx)
         
         print(f"✅ Policy Anchored on Chain: {w3.to_hex(tx_hash)}")
         return {
@@ -864,28 +874,29 @@ async def execute_trade(req: TradeRequest):
             'nonce': w3.eth.get_transaction_count(agent_eoa),
         }
         
-        signed_tx = w3.eth.account.sign_transaction(tx, agent_private_key)
+        # signed_tx = w3.eth.account.sign_transaction(tx, agent_private_key)
         
-        raw_tx = None
-        if hasattr(signed_tx, "rawTransaction"):
-            raw_tx = signed_tx.rawTransaction
-        elif hasattr(signed_tx, "raw_transaction"):
-            raw_tx = signed_tx.raw_transaction
-        elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
-            raw_tx = signed_tx["rawTransaction"]
-        else:
-            # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
-            try:
-                raw_tx = signed_tx[0]
-            except:
-                pass
+        # raw_tx = None
+        # if hasattr(signed_tx, "rawTransaction"):
+        #     raw_tx = signed_tx.rawTransaction
+        # elif hasattr(signed_tx, "raw_transaction"):
+        #     raw_tx = signed_tx.raw_transaction
+        # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
+        #     raw_tx = signed_tx["rawTransaction"]
+        # else:
+        #     # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
+        #     try:
+        #         raw_tx = signed_tx[0]
+        #     except:
+        #         pass
 
-        if raw_tx is None:
-            raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
+        # if raw_tx is None:
+        #     raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
 
-        # Send to Blockchain
-        tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        # # Send to Blockchain
+        # tx_hash = w3.eth.send_raw_transaction(raw_tx)
+        # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        tx_hash, receipt = send_tx(tx, agent_private_key)
         
         print(f"✅ Trade Executed! Hash: {w3.to_hex(tx_hash)}")
         return {"status": "success", "tx_hash": w3.to_hex(tx_hash)}

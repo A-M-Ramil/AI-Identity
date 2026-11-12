@@ -13,6 +13,14 @@ contract CredentialRegistry {
         uint256 expiryTime;
         bool revoked;
     }
+    address public immutable issuer;
+
+    constructor() { issuer = msg.sender; }
+
+    modifier onlyIssuer() {
+        require(msg.sender == issuer, "Not authorized issuer");
+        _;
+    }
 
     mapping(bytes32 => CredentialRecord) public credentials;
     mapping(bytes32 => bytes32[]) public holderCredentials;
@@ -29,7 +37,8 @@ contract CredentialRegistry {
         bytes32 _ipfsCID,
         bytes32 _credHash,
         uint256 _duration
-    ) external {
+    ) external onlyIssuer  {
+        require(credentials[_credID].issuanceTime == 0, "Credential already exists");
         credentials[_credID] = CredentialRecord({
             credentialID: _credID,
             issuerDID: _issuerDID,
@@ -45,7 +54,7 @@ contract CredentialRegistry {
         emit CredentialIssued(_credID, _issuerDID, _holderDID);
     }
     // --- PROTOCOL 5: REVOCATION (Step M3) ---
-    function revokeCredential(bytes32 _credID) external {
+    function revokeCredential(bytes32 _credID) external onlyIssuer  {
         
         // M5: Validate Constraints
         // Thesis Requirement: Only the Issuer (or Admin) can revoke.
@@ -73,7 +82,7 @@ contract CredentialRegistry {
         bytes32 _targetDID,
         bytes32 _reportCID,
         bytes32 _reportHash
-    ) external {
+    ) external onlyIssuer {
         // M9: Anchoring Logic
         // In a real system, we might store this in a mapping, 
         // but for pure logging (forensics), the Event Emission is the data storage.

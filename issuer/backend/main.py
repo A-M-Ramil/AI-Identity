@@ -26,16 +26,16 @@ USER_WALLET_MAP = {}
 IDENTITY_DB = {}
 CRED_CONFIG = {
     "DeFiTradingLicense": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:defi_trading_license:1.4801",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3160820:tag_4801"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:defi_trading_license:1.1094",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323395:tag_1094"
     },
     "PersonalAssistantID": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:personal_assistant_id:1.4814",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3160822:tag_4814"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:personal_assistant_id:1.1108",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323397:tag_1108"
     },
     "MedicalProxyAuth": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:medical_proxy_auth:1.4827",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3160824:tag_4827"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:medical_proxy_auth:1.1121",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323399:tag_1121"
     }
 }
 
@@ -123,7 +123,16 @@ try:
 except Exception as e:
     print(f"⚠️ CredentialRegistry Load Error: {e}")
     cred_contract = None
- 
+    
+def send_tx(tx):
+    signed = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
+    raw = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction")
+    tx_hash = w3.eth.send_raw_transaction(raw)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+    if receipt.status != 1:
+        raise HTTPException(status_code=409,
+            detail=f"Reverted on-chain: {w3.to_hex(tx_hash)}")
+    return tx_hash, receipt
 
 @app.get("/")
 def health_check():
@@ -209,27 +218,28 @@ async def create_ssi_identity(req: RegisterRequest):
             'gasPrice': w3.to_wei('1', 'gwei')
         })
         
-        signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)  
-        raw_tx = None
-        if hasattr(signed_tx, "rawTransaction"):
-            raw_tx = signed_tx.rawTransaction
-        elif hasattr(signed_tx, "raw_transaction"):
-            raw_tx = signed_tx.raw_transaction
-        elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
-            raw_tx = signed_tx["rawTransaction"]
-        else:
-            # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
-            try:
-                raw_tx = signed_tx[0]
-            except:
-                pass
+        # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)  
+        # raw_tx = None
+        # if hasattr(signed_tx, "rawTransaction"):
+        #     raw_tx = signed_tx.rawTransaction
+        # elif hasattr(signed_tx, "raw_transaction"):
+        #     raw_tx = signed_tx.raw_transaction
+        # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
+        #     raw_tx = signed_tx["rawTransaction"]
+        # else:
+        #     # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
+        #     try:
+        #         raw_tx = signed_tx[0]
+        #     except:
+        #         pass
 
-        if raw_tx is None:
-            raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
+        # if raw_tx is None:
+        #     raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
 
-        # Send to Blockchain
-        tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        # # Send to Blockchain
+        # tx_hash = w3.eth.send_raw_transaction(raw_tx)
+        # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        tx_hash, receipt = send_tx(tx)
 
 
 
@@ -360,14 +370,14 @@ async def issue_credential(req: IssueCredentialRequest):
             aca_py_attributes = [
                 {"name": "name", "value": req.credential_data.get("name", "User")},
                 {"name": "role", "value": req.credential_data.get("role", "Trader")},
-                {"name": "license_id", "value": f"LIC-{uuid.uuid4().hex[:6].upper()}"},
+                {"name": "license_id", "value": f"LIC-{uuid.uuid4().hex[:12].upper()}"},
                 {"name": "expiration_date", "value": req.credential_data.get("expiry", "2026-12-31")}
             ]
             
         elif clean_type == "PersonalAssistantID":
             aca_py_attributes = [
                 {"name": "name", "value": req.credential_data.get("name", "My AI Agent")},
-                {"name": "assistant_id", "value": f"AID-{uuid.uuid4().hex[:6].upper()}"}, # Schema expects 'assistant_id'
+                {"name": "assistant_id", "value": f"AID-{uuid.uuid4().hex[:12].upper()}"}, # Schema expects 'assistant_id'
                 {"name": "access_level", "value": "Full Access"},                         # Schema expects 'access_level'
                 {"name": "expiration_date", "value": req.credential_data.get("expiry", "2026-12-31")}
             ]
@@ -376,7 +386,7 @@ async def issue_credential(req: IssueCredentialRequest):
             aca_py_attributes = [
                 {"name": "patient_name", "value": req.credential_data.get("name", "John Doe")}, # Mapping 'name' to 'patient_name'
                 {"name": "proxy_name", "value": "AI Medical Agent"},
-                {"name": "authorization_id", "value": f"MED-{uuid.uuid4().hex[:6].upper()}"},
+                {"name": "authorization_id", "value": f"MED-{uuid.uuid4().hex[:12].upper()}"},
                 {"name": "valid_until", "value": req.credential_data.get("expiry", "2026-12-31")} # Schema expects 'valid_until'
             ]
         
@@ -467,20 +477,21 @@ async def issue_credential(req: IssueCredentialRequest):
             'gasPrice': w3.to_wei('1', 'gwei')
         })
 
-        signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
+        # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
         
-        # Robust Raw Transaction Extraction
-        raw_tx = None
-        if hasattr(signed_tx, "rawTransaction"): raw_tx = signed_tx.rawTransaction
-        elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx: raw_tx = signed_tx["rawTransaction"]
-        else:
-            try: raw_tx = signed_tx[0]
-            except: pass
+        # # Robust Raw Transaction Extraction
+        # raw_tx = None
+        # if hasattr(signed_tx, "rawTransaction"): raw_tx = signed_tx.rawTransaction
+        # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx: raw_tx = signed_tx["rawTransaction"]
+        # else:
+        #     try: raw_tx = signed_tx[0]
+        #     except: pass
 
-        if raw_tx is None: raise Exception("Could not extract raw transaction bytes")
+        # if raw_tx is None: raise Exception("Could not extract raw transaction bytes")
 
-        tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        # tx_hash = w3.eth.send_raw_transaction(raw_tx)
+        # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        tx_hash, receipt = send_tx(tx)
 
         print(f"✅ PROTOCOL 3 COMPLETE. Anchored at: {w3.to_hex(tx_hash)}")
         
@@ -537,20 +548,22 @@ async def revoke_credential(req: RevokeRequest):
             'gas': 2000000,
             'gasPrice': w3.to_wei('1', 'gwei')
         })
-        signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
+        # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
         
-        # Robust Raw TX Extraction
-        raw_tx = None
-        if hasattr(signed_tx, "rawTransaction"): raw_tx = signed_tx.rawTransaction
-        elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx: raw_tx = signed_tx["rawTransaction"]
-        else:
-            try: raw_tx = signed_tx[0]
-            except: pass
+        # # Robust Raw TX Extraction
+        # raw_tx = None
+        # if hasattr(signed_tx, "rawTransaction"): raw_tx = signed_tx.rawTransaction
+        # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx: raw_tx = signed_tx["rawTransaction"]
+        # else:
+        #     try: raw_tx = signed_tx[0]
+        #     except: pass
 
-        if raw_tx is None: raise Exception("Could not extract raw transaction bytes")
+        # if raw_tx is None: raise Exception("Could not extract raw transaction bytes")
 
-        # Send to Blockchain
-        tx_hash = w3.eth.send_raw_transaction(raw_tx)
+        # # Send to Blockchain
+        # tx_hash = w3.eth.send_raw_transaction(raw_tx)
+        
+        tx_hash, receipt = send_tx(tx)
         print("🔹 Step M3: Waiting for Consensus...")
         w3.eth.wait_for_transaction_receipt(tx_hash)
         

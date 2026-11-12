@@ -12,7 +12,7 @@ contract DelegationRegistry {
     mapping(address => mapping(address => Permission)) public permissions;
 
     event DelegationSet(address indexed owner, address indexed agent, uint256 limit, uint256 expiry);
-
+    event DelegationRevoked(address indexed owner, address indexed agent);
     // M1 & M2: Policy Definition & Authorization
     function setPermission(address _agent, uint256 _limit, uint256 _duration) external {
         permissions[msg.sender][_agent] = Permission({
@@ -30,5 +30,10 @@ contract DelegationRegistry {
         if (block.timestamp > p.expiry) return false;
         if (_amount > p.spendLimit) return false;
         return true;
+    }
+    function revokePermission(address _agent) external {
+        require(permissions[msg.sender][_agent].active, "No active delegation");
+        permissions[msg.sender][_agent].active = false;
+        emit DelegationRevoked(msg.sender, _agent);
     }
 }
