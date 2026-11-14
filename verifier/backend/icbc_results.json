@@ -1,0 +1,232 @@
+{
+  "environment": {
+    "os": "Linux 6.6.87.2-microsoft-standard-WSL2 (x86_64)",
+    "cpu": "AMD Ryzen 5 5600 6-Core Processor",
+    "python": "3.12.3",
+    "web3py": "7.14.0",
+    "anvil": "anvil 0.2.0 (10f1402 2024-05-25T00:17:06.450190017Z)",
+    "solc": "0.8.25+commit.b61c2a91",
+    "evm_target": "paris",
+    "acapy": "1.2.0",
+    "kubo": "0.39.0",
+    "chain_mode": "automine",
+    "anvil_automine": true,
+    "scope": "single machine, localhost, WAN latency excluded"
+  },
+  "deployment_gas": {
+    "DIDRegistry": 398557,
+    "AgentRegistry": 299436,
+    "CredentialRegistry": 518287,
+    "DelegationRegistry": 288051,
+    "AgentWallet": 258612
+  },
+  "gas_profile": [
+    {
+      "op": "P1 registerDID",
+      "gas": 158092,
+      "note": ""
+    },
+    {
+      "op": "P2 registerAgent (owner's 1st agent)",
+      "gas": 187794,
+      "note": "new array slot"
+    },
+    {
+      "op": "P2 registerAgent (owner's 2nd+ agent)",
+      "gas": 170694,
+      "note": ""
+    },
+    {
+      "op": "P3 issueCredential",
+      "gas": 227941,
+      "note": ""
+    },
+    {
+      "op": "P5 revokeCredential",
+      "gas": 47961,
+      "note": ""
+    },
+    {
+      "op": "P6 setPermission (fresh agent)",
+      "gas": 91044,
+      "note": "new storage slots"
+    },
+    {
+      "op": "P6 setPermission (update existing)",
+      "gas": 34144,
+      "note": "slot rewrite"
+    },
+    {
+      "op": "P6 revokePermission",
+      "gas": 23930,
+      "note": ""
+    },
+    {
+      "op": "P6 executeTrade (new recipient account)",
+      "gas": 70742,
+      "note": "includes new-account cost"
+    },
+    {
+      "op": "P6 executeTrade (burn addr, 1st call)",
+      "gas": 45526,
+      "note": "may include new-account cost"
+    },
+    {
+      "op": "P6 executeTrade (burn addr, steady)",
+      "gas": 45526,
+      "note": ""
+    }
+  ],
+  "security": [
+    {
+      "scenario": "S1  Non-issuer revokes credential",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "('execution reverted: revert: Not authorized issuer', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000154e6f7420617574686f72697a6564206973737565720000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S2  Non-issuer issues credential",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "('execution reverted: revert: Not authorized issuer', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000154e6f7420617574686f72697a6564206973737565720000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S3  Register agent under victim's owner DID",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "('execution reverted: revert: Caller does not own ownerDID', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001c43616c6c657220646f6573206e6f74206f776e206f776e657244494400000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S3b Re-register existing agent DID (overwrite)",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "('execution reverted: revert: Agent DID already exists!', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000194167656e742044494420616c7265616479206578697374732100000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S4  Revoked credential reports Revoked",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "status=Revoked",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S5  Re-issue same credID to un-revoke",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "('execution reverted: revert: Credential already exists', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001943726564656e7469616c20616c72656164792065786973747300000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S6  Trade after delegation revoked",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "('execution reverted: revert: ACCESS DENIED: Delegation Policy Violation', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a4143434553532044454e4945443a2044656c65676174696f6e20506f6c6963792056696f6c6174696f6e00000000000000000000000000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S7  Trade above delegated limit",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "('execution reverted: revert: ACCESS DENIED: Delegation Policy Violation', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a4143434553532044454e4945443a2044656c65676174696f6e20506f6c6963792056696f6c6174696f6e00000000000000000000000000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S8  Non-owner revokes another's delegation",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "('execution reverted: revert: No active delegation', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000144e6f206163746976652064656c65676174696f6e000000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S9  Trade after delegation expired",
+      "blocked": 5,
+      "repeats": 5,
+      "control_ok": 5,
+      "observed_reason": "('execution reverted: revert: ACCESS DENIED: Delegation Policy Violation', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a4143434553532044454e4945443a2044656c65676174696f6e20506f6c6963792056696f6c6174696f6e00000000000000000000000000000000000000000000')",
+      "verdict": "PASS"
+    }
+  ],
+  "scaling_direct": {
+    "5": {
+      "tps": {
+        "n": 5,
+        "mean": 33.32625907889734,
+        "median": 33.29897123689131,
+        "sd": 0.40173685383094493,
+        "p95": 33.88945384844948
+      },
+      "latency_ms": {
+        "n": 25,
+        "mean": 113.12887371983379,
+        "median": 144.22277199992095,
+        "sd": 48.4101719151712,
+        "p95": 150.49858299971675
+      },
+      "failures": 0
+    },
+    "10": {
+      "tps": {
+        "n": 5,
+        "mean": 48.581602119888935,
+        "median": 49.37342116735553,
+        "sd": 1.9440546019052654,
+        "p95": 50.23198587808642
+      },
+      "latency_ms": {
+        "n": 50,
+        "mean": 136.80873615965538,
+        "median": 147.49025649871328,
+        "sd": 53.46103091030245,
+        "p95": 205.15882200197666
+      },
+      "failures": 0
+    },
+    "25": {
+      "tps": {
+        "n": 5,
+        "mean": 70.1606761260966,
+        "median": 70.04137282258611,
+        "sd": 2.279251135224143,
+        "p95": 73.89394035204441
+      },
+      "latency_ms": {
+        "n": 125,
+        "mean": 153.1955153119343,
+        "median": 160.2370639993751,
+        "sd": 57.18478749136681,
+        "p95": 252.6049200023408
+      },
+      "failures": 0
+    },
+    "50": {
+      "tps": {
+        "n": 5,
+        "mean": 84.48255823619218,
+        "median": 84.88711212723213,
+        "sd": 1.4572727572203696,
+        "p95": 85.54164961411254
+      },
+      "latency_ms": {
+        "n": 250,
+        "mean": 156.28102030388254,
+        "median": 148.9447374988231,
+        "sd": 60.182498511396936,
+        "p95": 269.992755002022
+      },
+      "failures": 0
+    }
+  }
+}

@@ -8,7 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import base64
 import uuid
 import os
+import asyncio
+import time
 
+AGENT_WALLET_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
+admin_nonce_lock = asyncio.Lock()
 # --- CONFIGURATION ---
 # 1. Blockchain (Anvil)
 ANVIL_RPC_URL = "http://127.0.0.1:8545"
@@ -81,6 +85,10 @@ class IssueCredentialRequest(BaseModel):
 
 class VerifyPresentationRequest(BaseModel):
     presentation_json: dict
+    
+class RevokeDelegationRequest(BaseModel):
+    owner_address: str
+    agent_did: str
 
 app = FastAPI()
 
@@ -96,28 +104,32 @@ w3 = Web3(Web3.HTTPProvider(ANVIL_RPC_URL))
 
 CRED_CONFIG = {
     "DeFiTradingLicense": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:defi_trading_license:1.1094",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323395:tag_1094"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:defi_trading_license:1.7714",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3329685:tag_7714"
     },
     "PersonalAssistantID": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:personal_assistant_id:1.1108",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323397:tag_1108"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:personal_assistant_id:1.7722",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3329687:tag_7722"
     },
     "MedicalProxyAuth": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:medical_proxy_auth:1.1121",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323399:tag_1121"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:medical_proxy_auth:1.7737",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3329689:tag_7737"
     }
 }
-def send_tx(tx):
-    signed = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
-    raw = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction")
+def send_tx(tx, private_key=None):
+    signed = w3.eth.account.sign_transaction(tx, private_key or ADMIN_PRIVATE_KEY)
+    raw = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction", None)
+    if raw is None:
+        raise Exception(f"Could not extract raw tx bytes, type: {type(signed)}")
     tx_hash = w3.eth.send_raw_transaction(raw)
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
     if receipt.status != 1:
         raise HTTPException(status_code=409,
             detail=f"Reverted on-chain: {w3.to_hex(tx_hash)}")
     return tx_hash, receipt
-
+async def send_tx_async(tx, private_key=None):
+    """Non-blocking wrapper so concurrent agent requests don't serialize on FastAPI's event loop."""
+    return await asyncio.to_thread(send_tx, tx, private_key)
 
 def load_contract_data(filename):
     with open(filename, "r") as f:
@@ -274,28 +286,125 @@ class TradeRequest(BaseModel):
 @app.get("/")
 def health_check():
     return {"status": "active", "protocol": "1", "mode": "ACA-Py Bridge"}
+def fund_agentwallet():
+    return w3.eth.send_transaction({'from': w3.eth.accounts[0],
+                         'to': AGENT_WALLET_ADDRESS,
+                         'value': w3.to_wei(10, 'ether')})
+
+fund_agentwallet()  # Fund the Agent Wallet with 10 ETH for testing
+
+# @app.post("/protocol2/register-abcd")
+# async def register_agent_abcd(req: RegisterABCDRequest):
+#     print(f"\n--- 🤖 PROTOCOL 2: AGENT REGISTRATION (ABCD) ---")
+#     try:
+#         # A. IDENTITY GENERATION (Layer C)
+#         # 1. Generate Real ETH Wallet (For Protocol 6)
+#         acct = w3.eth.account.create()
+#         agent_address = acct.address
+#         agent_private_key = acct.key.hex()
+#         print(f"🔹 Layer C (Wallet): {agent_address}")
+        
+#         # 2. Generate DID String
+#         agent_did_string = f"did:sov:agent:{uuid.uuid4().hex[:8]}"
+        
+#         print(f"🔹 Layer C (Wallet): {agent_address}")
+#         print(f"🔹 Layer C (DID):    {agent_did_string}")
+
+        
+#         async with httpx.AsyncClient() as client:
+#             did_res = await client.post(
+#                 f"{ACAPY_ADMIN_URL}/wallet/did/create",
+#                 json={"method": "sov", "options": {"key_type": "ed25519"}}
+#             )
+#             if did_res.status_code != 200:
+#                 raise HTTPException(status_code=500, detail="ACA-Py DID Creation Failed")
+            
+#             did_data = did_res.json()
+#             agent_did_string = did_data["result"]["did"]
+#             verkey = did_data["result"]["verkey"]
+            
+#         print(f"🔹 Layer C (DID):    {agent_did_string}")
+#         print(f"🔹 Layer C (Verkey): {verkey}")
+        
+#         # B. HASHING (Layer A)
+#         model_string = f"{req.model_architecture}|{req.version_tag}|{req.training_hash}"
+        
+#         # Solidity bytes32 conversion
+#         agent_hash = w3.keccak(text=agent_did_string)
+#         owner_hash = w3.keccak(text=req.owner_did)
+#         model_hash = w3.keccak(text=model_string)
+
+#         print(f"🔹 Layer A (Hash):   {w3.to_hex(model_hash)}")
+#         # C. BLOCKCHAIN ANCHORING (The "Registry")
+#         # We use the existing Smart Contract logic you provided
+#         contract = w3.eth.contract(address=AGENT_REGISTRY_ADDRESS, abi=AGENT_REGISTRY_ABI)
+
+#         tx = contract.functions.registerAgent(
+#             agent_hash,
+#             owner_hash,
+#             model_hash
+#         ).build_transaction({
+#             'from': w3.eth.accounts[0],
+#             'nonce': w3.eth.get_transaction_count(w3.eth.accounts[0]),
+#             'gas': 2000000,
+#             'gasPrice': w3.to_wei('1', 'gwei')
+#         })
+#         # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)  
+#         # raw_tx = None
+#         # if hasattr(signed_tx, "rawTransaction"):
+#         #     raw_tx = signed_tx.rawTransaction
+#         # elif hasattr(signed_tx, "raw_transaction"):
+#         #     raw_tx = signed_tx.raw_transaction
+#         # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
+#         #     raw_tx = signed_tx["rawTransaction"]
+#         # else:
+#         #     # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
+#         #     try:
+#         #         raw_tx = signed_tx[0]
+#         #     except:
+#         #         pass
+
+#         # if raw_tx is None:
+#         #     raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
+#         tx_hash, receipt = send_tx(tx)
+#         # Send to Blockchain
+#         # tx_hash = w3.eth.send_raw_transaction(raw_tx)
+#         # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
 
+        
+#         print(f"✅ Agent Anchored! TX: {w3.to_hex(tx_hash)}")
 
+#         # D. PERSISTENCE (Save Keys for Protocol 6)
+#         save_agent_key(agent_did_string, agent_private_key, agent_address, {
+#             "arch": req.model_architecture,
+#             "ver": req.version_tag
+#         })
+
+#         return {
+#             "status": "success",
+#             "abcd_layers": {
+#                 "C": {"did": agent_did_string, "wallet_address": agent_address},
+#                 "A": {"fingerprint": model_string}
+#             },
+#             "tx_hash": w3.to_hex(tx_hash)
+#         }
+
+#     except Exception as e:
+#         print(f"❌ REGISTRATION FAILED: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/protocol2/register-abcd")
 async def register_agent_abcd(req: RegisterABCDRequest):
     print(f"\n--- 🤖 PROTOCOL 2: AGENT REGISTRATION (ABCD) ---")
+    t_start = time.perf_counter()
     try:
         # A. IDENTITY GENERATION (Layer C)
-        # 1. Generate Real ETH Wallet (For Protocol 6)
         acct = w3.eth.account.create()
         agent_address = acct.address
         agent_private_key = acct.key.hex()
-        print(f"🔹 Layer C (Wallet): {agent_address}")
-        
-        # 2. Generate DID String
-        agent_did_string = f"did:sov:agent:{uuid.uuid4().hex[:8]}"
-        
-        print(f"🔹 Layer C (Wallet): {agent_address}")
-        print(f"🔹 Layer C (DID):    {agent_did_string}")
 
-        
+        t_aca0 = time.perf_counter()
         async with httpx.AsyncClient() as client:
             did_res = await client.post(
                 f"{ACAPY_ADMIN_URL}/wallet/did/create",
@@ -303,81 +412,92 @@ async def register_agent_abcd(req: RegisterABCDRequest):
             )
             if did_res.status_code != 200:
                 raise HTTPException(status_code=500, detail="ACA-Py DID Creation Failed")
-            
             did_data = did_res.json()
             agent_did_string = did_data["result"]["did"]
             verkey = did_data["result"]["verkey"]
-            
+        t_acapy_ms = (time.perf_counter() - t_aca0) * 1000
+
+        print(f"🔹 Layer C (Wallet): {agent_address}")
         print(f"🔹 Layer C (DID):    {agent_did_string}")
-        print(f"🔹 Layer C (Verkey): {verkey}")
-        
-        # B. HASHING (Layer A)
+
+        # B. HASHING & IPFS METADATA (Layer A)
         model_string = f"{req.model_architecture}|{req.version_tag}|{req.training_hash}"
-        
-        # Solidity bytes32 conversion
+        t_ipfs0 = time.perf_counter()
+        agent_doc = {
+            "agentDID": agent_did_string,
+            "ownerDID": req.owner_did,
+            "walletAddress": agent_address,
+            "modelArchitecture": req.model_architecture,
+            "version": req.version_tag,
+            "trainingHash": req.training_hash
+        }
+        ipfs_cid = "QmOffline"
+        try:
+            async with httpx.AsyncClient() as client:
+                ipfs_res = await client.post(IPFS_API_URL, files={'file': json.dumps(agent_doc)})
+                if ipfs_res.status_code == 200:
+                    ipfs_cid = ipfs_res.json()["Hash"]
+        except Exception:
+            pass
+        t_ipfs_ms = (time.perf_counter() - t_ipfs0) * 1000
+
         agent_hash = w3.keccak(text=agent_did_string)
         owner_hash = w3.keccak(text=req.owner_did)
         model_hash = w3.keccak(text=model_string)
 
-        print(f"🔹 Layer A (Hash):   {w3.to_hex(model_hash)}")
-        # C. BLOCKCHAIN ANCHORING (The "Registry")
-        # We use the existing Smart Contract logic you provided
+        # C. BLOCKCHAIN ANCHORING (Thread-safe nonce lock for Admin Account[0])
+        t_chain0 = time.perf_counter()
         contract = w3.eth.contract(address=AGENT_REGISTRY_ADDRESS, abi=AGENT_REGISTRY_ABI)
+        async with admin_nonce_lock:
+            nonce = await asyncio.to_thread(w3.eth.get_transaction_count, w3.eth.accounts[0], 'pending')
+            tx = contract.functions.registerAgent(
+                agent_hash,
+                owner_hash,
+                model_hash
+            ).build_transaction({
+                'from': w3.eth.accounts[0],
+                'nonce': nonce,
+                'gas': 2000000,
+                'gasPrice': w3.to_wei('1', 'gwei')
+            })
+            tx_hash, receipt = await send_tx_async(tx)
+        t_chain_ms = (time.perf_counter() - t_chain0) * 1000
 
-        tx = contract.functions.registerAgent(
-            agent_hash,
-            owner_hash,
-            model_hash
-        ).build_transaction({
-            'from': w3.eth.accounts[0],
-            'nonce': w3.eth.get_transaction_count(w3.eth.accounts[0]),
-            'gas': 2000000,
-            'gasPrice': w3.to_wei('1', 'gwei')
-        })
-        # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)  
-        # raw_tx = None
-        # if hasattr(signed_tx, "rawTransaction"):
-        #     raw_tx = signed_tx.rawTransaction
-        # elif hasattr(signed_tx, "raw_transaction"):
-        #     raw_tx = signed_tx.raw_transaction
-        # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
-        #     raw_tx = signed_tx["rawTransaction"]
-        # else:
-        #     # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
-        #     try:
-        #         raw_tx = signed_tx[0]
-        #     except:
-        #         pass
-
-        # if raw_tx is None:
-        #     raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
-        tx_hash, receipt = send_tx(tx)
-        # Send to Blockchain
-        # tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-
-        
-        print(f"✅ Agent Anchored! TX: {w3.to_hex(tx_hash)}")
+        print(f"✅ Agent Anchored! TX: {w3.to_hex(tx_hash)} (Gas: {receipt.gasUsed})")
 
         # D. PERSISTENCE (Save Keys for Protocol 6)
         save_agent_key(agent_did_string, agent_private_key, agent_address, {
             "arch": req.model_architecture,
-            "ver": req.version_tag
+            "ver": req.version_tag,
+            "ipfs_cid": ipfs_cid
         })
+        t_total_ms = (time.perf_counter() - t_start) * 1000
 
         return {
             "status": "success",
             "abcd_layers": {
-                "C": {"did": agent_did_string, "wallet_address": agent_address},
+                "C": {"did": agent_did_string, "wallet_address": agent_address, "ipfs_cid": ipfs_cid},
                 "A": {"fingerprint": model_string}
             },
-            "tx_hash": w3.to_hex(tx_hash)
+            "tx_hash": w3.to_hex(tx_hash),
+            "gas_used": receipt.gasUsed,
+            "timings_ms": {
+                "acapy": round(t_acapy_ms, 2),
+                "ipfs": round(t_ipfs_ms, 2),
+                "chain": round(t_chain_ms, 2),
+                "backend": round(max(0.0, t_total_ms - (t_acapy_ms + t_ipfs_ms + t_chain_ms)), 2),
+                "total": round(t_total_ms, 2)
+            }
         }
-
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ REGISTRATION FAILED: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
 
 # --- 2. VERIFICATION (READ) ---
 @app.post("/protocol2/verify-link")
@@ -446,32 +566,60 @@ async def fetch_fleet(owner_did: str):
         return {"status": "error", "reason": str(e)}
 
 # --- 4. FUNDING (From Protocol 6 Setup) ---
+# @app.post("/protocol2/fund-agent")
+# async def fund_agent(req: FundAgentRequest):
+#     try:
+#         # Retrieve Agent Address from Enclave
+#         agent_data = get_agent_key(req.agent_did)
+#         if not agent_data: raise HTTPException(status_code=404, detail="Agent not found")
+        
+#         target_address = agent_data["address"]
+#         print(f"\n--- 💸 FUNDING AGENT: {target_address} ---")
+
+#         # In a real app, Frontend signs this. 
+#         # For demo speed, Admin (Account 0) funds it if using this endpoint.
+#         tx = {
+#             'to': target_address,
+#             'value': w3.to_wei(req.amount_eth, 'ether'),
+#             'gas': 21000,
+#             'gasPrice': w3.to_wei('1', 'gwei'),
+#             'nonce': w3.eth.get_transaction_count(w3.eth.accounts[0]),
+#         }
+#         signed = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
+#         tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+#         w3.eth.wait_for_transaction_receipt(tx_hash)
+
+#         return {"status": "success", "new_balance": float(w3.from_wei(w3.eth.get_balance(target_address), 'ether'))}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/protocol2/fund-agent")
 async def fund_agent(req: FundAgentRequest):
     try:
-        # Retrieve Agent Address from Enclave
         agent_data = get_agent_key(req.agent_did)
-        if not agent_data: raise HTTPException(status_code=404, detail="Agent not found")
-        
-        target_address = agent_data["address"]
+        if not agent_data:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        target_address = w3.to_checksum_address(agent_data["address"])
         print(f"\n--- 💸 FUNDING AGENT: {target_address} ---")
 
-        # In a real app, Frontend signs this. 
-        # For demo speed, Admin (Account 0) funds it if using this endpoint.
-        tx = {
-            'to': target_address,
-            'value': w3.to_wei(req.amount_eth, 'ether'),
-            'gas': 21000,
-            'gasPrice': w3.to_wei('1', 'gwei'),
-            'nonce': w3.eth.get_transaction_count(w3.eth.accounts[0]),
-        }
-        signed = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
-        tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
-        w3.eth.wait_for_transaction_receipt(tx_hash)
+        async with admin_nonce_lock:
+            nonce = await asyncio.to_thread(w3.eth.get_transaction_count, w3.eth.accounts[0], 'pending')
+            tx = {
+                'to': target_address,
+                'value': w3.to_wei(req.amount_eth, 'ether'),
+                'gas': 21000,
+                'gasPrice': w3.to_wei('1', 'gwei'),
+                'nonce': nonce,
+            }
+            await send_tx_async(tx)
 
-        return {"status": "success", "new_balance": float(w3.from_wei(w3.eth.get_balance(target_address), 'ether'))}
+        bal = await asyncio.to_thread(w3.eth.get_balance, target_address)
+        return {"status": "success", "new_balance": float(w3.from_wei(bal, 'ether'))}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.get("/protocol2/get-balance/{agent_did}")
 async def get_agent_balance(agent_did: str):
@@ -707,6 +855,9 @@ async def check_proof_status(pres_ex_id: str):
                         "verified": False,
                         "details": f"Blockchain Check Failed: {claim_type} is REVOKED"
                     }
+                elif chain_status[1] == "Expired":
+                    return {"status": "failed", "verified": False,
+                                "details": f"Blockchain Check Failed: {claim_type} is EXPIRED"}
                 
                 # FAIL 2: MISSING (Strict Mode)
                 elif chain_status[0] == False:
@@ -716,7 +867,7 @@ async def check_proof_status(pres_ex_id: str):
                         "verified": False,
                         "details": f"Blockchain Anchor Missing: Credential not found on Ledger"
                     }
-
+                
                 # SUCCESS
                 return {
                     "status": "verified",
@@ -760,75 +911,75 @@ def process_proof_record(data):
 
 
 # 2. DATABASE HELPER (Update agent_keys.json with the new Smart Wallet Address)
-@app.post("/protocol6/delegate")
-async def set_delegation(req: DelegateRequest):
-    print(f"\n--- 🤝 PROTOCOL 6: SETTING DELEGATION POLICY ---")
-    try:
-        # 1. Resolve Agent DID -> EOA Address
-        agent_data = get_agent_key(req.agent_did)
-        if not agent_data:
-            raise HTTPException(status_code=404, detail="Agent DID not found. Register in P2 first.")
+# @app.post("/protocol6/delegate")
+# async def set_delegation(req: DelegateRequest):
+#     print(f"\n--- 🤝 PROTOCOL 6: SETTING DELEGATION POLICY ---")
+#     try:
+#         # 1. Resolve Agent DID -> EOA Address
+#         agent_data = get_agent_key(req.agent_did)
+#         if not agent_data:
+#             raise HTTPException(status_code=404, detail="Agent DID not found. Register in P2 first.")
         
-        agent_eoa = agent_data["address"]
-        print(f"🔹 Agent DID: {req.agent_did}")
-        print(f"🔹 Resolved EOA: {agent_eoa}")
+#         agent_eoa = agent_data["address"]
+#         print(f"🔹 Agent DID: {req.agent_did}")
+#         print(f"🔹 Resolved EOA: {agent_eoa}")
 
-        # 2. Define Policy on Blockchain
-        limit_wei = w3.to_wei(req.spend_limit_eth, 'ether')
+#         # 2. Define Policy on Blockchain
+#         limit_wei = w3.to_wei(req.spend_limit_eth, 'ether')
         
-        delegation_contract = w3.eth.contract(address=DELEGATION_REGISTRY_ADDRESS, abi=DELEGATION_ABI)
+#         delegation_contract = w3.eth.contract(address=DELEGATION_REGISTRY_ADDRESS, abi=DELEGATION_ABI)
         
-        # The Owner (Account 0 acting as Owner) sets the rule
-        # "I authorize [AgentEOA] to spend up to [Limit]"
-        tx = delegation_contract.functions.setPermission(
-            agent_eoa,
-            limit_wei,
-            req.duration_seconds
-        ).build_transaction({
-            'from': req.owner_address,
-            'nonce': w3.eth.get_transaction_count(req.owner_address),
-            'gas': 2000000,
-            'gasPrice': w3.to_wei('1', 'gwei')
-        })
+#         # The Owner (Account 0 acting as Owner) sets the rule
+#         # "I authorize [AgentEOA] to spend up to [Limit]"
+#         tx = delegation_contract.functions.setPermission(
+#             agent_eoa,
+#             limit_wei,
+#             req.duration_seconds
+#         ).build_transaction({
+#             'from': req.owner_address,
+#             'nonce': w3.eth.get_transaction_count(req.owner_address),
+#             'gas': 2000000,
+#             'gasPrice': w3.to_wei('1', 'gwei')
+#         })
         
-        # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
+#         # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
           
-        # raw_tx = None
-        # if hasattr(signed_tx, "rawTransaction"):
-        #     raw_tx = signed_tx.rawTransaction
-        # elif hasattr(signed_tx, "raw_transaction"):
-        #     raw_tx = signed_tx.raw_transaction
-        # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
-        #     raw_tx = signed_tx["rawTransaction"]
-        # else:
-        #     # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
-        #     try:
-        #         raw_tx = signed_tx[0]
-        #     except:
-        #         pass
+#         # raw_tx = None
+#         # if hasattr(signed_tx, "rawTransaction"):
+#         #     raw_tx = signed_tx.rawTransaction
+#         # elif hasattr(signed_tx, "raw_transaction"):
+#         #     raw_tx = signed_tx.raw_transaction
+#         # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx:
+#         #     raw_tx = signed_tx["rawTransaction"]
+#         # else:
+#         #     # Fallback: SignedTransaction is often a tuple/NamedTuple where index 0 is raw bytes
+#         #     try:
+#         #         raw_tx = signed_tx[0]
+#         #     except:
+#         #         pass
 
-        # if raw_tx is None:
-        #     raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
+#         # if raw_tx is None:
+#         #     raise Exception(f"Could not extract raw transaction bytes. signed_tx type: {type(signed_tx)}")
 
-        # # Send to Blockchain
-        # tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        tx_hash, receipt = send_tx(tx)
+#         # # Send to Blockchain
+#         # tx_hash = w3.eth.send_raw_transaction(raw_tx)
+#         # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+#         tx_hash, receipt = send_tx(tx)
         
-        print(f"✅ Policy Anchored on Chain: {w3.to_hex(tx_hash)}")
-        return {
-            "status": "success", 
-            "tx_hash": w3.to_hex(tx_hash), 
-            "authorized_agent": agent_eoa
-        }
+#         print(f"✅ Policy Anchored on Chain: {w3.to_hex(tx_hash)}")
+#         return {
+#             "status": "success", 
+#             "tx_hash": w3.to_hex(tx_hash), 
+#             "authorized_agent": agent_eoa
+#         }
 
-    except Exception as e:
-        print(f"❌ DELEGATION FAILED: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+#     except Exception as e:
+#         print(f"❌ DELEGATION FAILED: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
-# --- 2. EXECUTION (Layer D Enforcement) ---
-@app.post("/protocol6/execute-trade")
-async def execute_trade(req: TradeRequest):
+# # --- 2. EXECUTION (Layer D Enforcement) ---
+# @app.post("/protocol6/execute-trade")
+# async def execute_trade(req: TradeRequest):
     print(f"\n--- ⚙️ PROTOCOL 6: AGENT EXECUTION ---")
     try:
         # 1. Retrieve Credentials from Enclave
@@ -856,7 +1007,7 @@ async def execute_trade(req: TradeRequest):
         
         # ENFORCEMENT LOGIC
         if not is_active:
-             return {"status": "denied", "reason": "Policy Inactive or Revoked"}
+             return {"status": "denied", "reason": "Delegation revoked"}
         if current_time > expiry:
              return {"status": "denied", "reason": "Policy Expired"}
         if amount_wei > limit:
@@ -936,6 +1087,147 @@ async def inspect_delegation(owner: str, agent_did: str):
 # ... imports ...
 
 
+# @app.post("/protocol6/revoke-delegation")
+# async def revoke_delegation(req: RevokeDelegationRequest):
+#     agent_data = get_agent_key(req.agent_did)
+#     if not agent_data:
+#         raise HTTPException(status_code=404, detail="Agent DID not found")
+#     c = w3.eth.contract(address=DELEGATION_REGISTRY_ADDRESS, abi=DELEGATION_ABI)
+#     tx = c.functions.revokePermission(
+#         w3.to_checksum_address(agent_data["address"])
+#     ).build_transaction({
+#         'from': req.owner_address,
+#         'nonce': w3.eth.get_transaction_count(req.owner_address),
+#         'gas': 2000000,
+#         'gasPrice': w3.to_wei('1', 'gwei')
+#     })
+#     tx_hash, _ = send_tx(tx)
+#     return {"status": "success", "tx_hash": w3.to_hex(tx_hash)}
+
+@app.post("/protocol6/delegate")
+async def set_delegation(req: DelegateRequest):
+    print(f"\n--- 🤝 PROTOCOL 6: SETTING DELEGATION POLICY ---")
+    t_start = time.perf_counter()
+    try:
+        agent_data = get_agent_key(req.agent_did)
+        if not agent_data:
+            raise HTTPException(status_code=404, detail="Agent DID not found. Register in P2 first.")
+
+        agent_eoa = w3.to_checksum_address(agent_data["address"])
+        limit_wei = w3.to_wei(req.spend_limit_eth, 'ether')
+        delegation_contract = w3.eth.contract(address=DELEGATION_REGISTRY_ADDRESS, abi=DELEGATION_ABI)
+
+        async with admin_nonce_lock:
+            nonce = await asyncio.to_thread(w3.eth.get_transaction_count, req.owner_address, 'pending')
+            tx = delegation_contract.functions.setPermission(
+                agent_eoa,
+                limit_wei,
+                req.duration_seconds
+            ).build_transaction({
+                'from': req.owner_address,
+                'nonce': nonce,
+                'gas': 2000000,
+                'gasPrice': w3.to_wei('1', 'gwei')
+            })
+            tx_hash, receipt = await send_tx_async(tx)
+
+        t_total_ms = (time.perf_counter() - t_start) * 1000
+        return {
+            "status": "success",
+            "tx_hash": w3.to_hex(tx_hash),
+            "gas_used": receipt.gasUsed,
+            "authorized_agent": agent_eoa,
+            "latency_ms": round(t_total_ms, 2)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/protocol6/execute-trade")
+async def execute_trade(req: TradeRequest):
+    print(f"\n--- ⚙️ PROTOCOL 6: AGENT EXECUTION ---")
+    t_start = time.perf_counter()
+    try:
+        agent_data = get_agent_key(req.agent_did)
+        if not agent_data:
+            raise HTTPException(status_code=404, detail="Agent not found")
 
+        agent_private_key = agent_data["private_key"]
+        agent_eoa = w3.to_checksum_address(agent_data["address"])
+        amount_wei = w3.to_wei(req.amount_eth, 'ether')
+
+        def _check_and_execute_sync():
+            delegation_contract = w3.eth.contract(address=DELEGATION_REGISTRY_ADDRESS, abi=DELEGATION_ABI)
+            owner_address = w3.eth.accounts[0]
+
+            # 1. Pre-flight Policy Check
+            perm = delegation_contract.functions.permissions(owner_address, agent_eoa).call()
+            is_active, limit, expiry = perm[0], perm[1], perm[2]
+            current_time = w3.eth.get_block('latest')['timestamp']
+
+            if not is_active:
+                return {"status": "denied", "reason": "Delegation revoked"}
+            if current_time > expiry:
+                return {"status": "denied", "reason": "Policy Expired"}
+            if amount_wei > limit:
+                return {"status": "denied", "reason": f"Amount ({req.amount_eth}) Exceeds Limit ({w3.from_wei(limit,'ether')})"}
+
+            # 2. Execution (Via AgentWallet.sol if configured, else direct EOA transfer)
+            nonce = w3.eth.get_transaction_count(agent_eoa, 'pending')
+            burn_addr = w3.to_checksum_address("0x000000000000000000000000000000000000dEaD")
+
+            if AGENT_WALLET_ADDRESS and WALLET_ABI:
+                wallet_contract = w3.eth.contract(address=w3.to_checksum_address(AGENT_WALLET_ADDRESS), abi=WALLET_ABI)
+                tx = wallet_contract.functions.executeTrade(burn_addr, amount_wei).build_transaction({
+                    'from': agent_eoa,
+                    'nonce': nonce,
+                    'gas': 150000,
+                    'gasPrice': w3.to_wei('1', 'gwei')
+                })
+            else:
+                tx = {
+                    'to': burn_addr,
+                    'value': amount_wei,
+                    'gas': 21000,
+                    'gasPrice': w3.to_wei('1', 'gwei'),
+                    'nonce': nonce,
+                }
+
+            tx_hash, receipt = send_tx(tx, agent_private_key)
+            return {
+                "status": "success",
+                "tx_hash": w3.to_hex(tx_hash),
+                "gas_used": receipt.gasUsed
+            }
+
+        # Run inside worker thread so concurrent agents execute in parallel!
+        result = await asyncio.to_thread(_check_and_execute_sync)
+        result["latency_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"⛔ ERROR: {e}")
+        return {"status": "error", "reason": str(e)}
+    
+@app.post("/protocol6/revoke-delegation")
+async def revoke_delegation(req: RevokeDelegationRequest):
+    agent_data = get_agent_key(req.agent_did)
+    if not agent_data:
+        raise HTTPException(status_code=404, detail="Agent DID not found")
+    c = w3.eth.contract(address=DELEGATION_REGISTRY_ADDRESS, abi=DELEGATION_ABI)
+    async with admin_nonce_lock:
+        nonce = await asyncio.to_thread(w3.eth.get_transaction_count, req.owner_address, 'pending')
+        tx = c.functions.revokePermission(
+            w3.to_checksum_address(agent_data["address"])
+        ).build_transaction({
+            'from': req.owner_address,
+            'nonce': nonce,
+            'gas': 2000000,
+            'gasPrice': w3.to_wei('1', 'gwei')
+        })
+        tx_hash, receipt = await send_tx_async(tx)
+    return {"status": "success", "tx_hash": w3.to_hex(tx_hash), "gas_used": receipt.gasUsed}

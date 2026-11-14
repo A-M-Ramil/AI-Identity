@@ -26,19 +26,18 @@ USER_WALLET_MAP = {}
 IDENTITY_DB = {}
 CRED_CONFIG = {
     "DeFiTradingLicense": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:defi_trading_license:1.1094",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323395:tag_1094"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:defi_trading_license:1.7714",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3329685:tag_7714"
     },
     "PersonalAssistantID": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:personal_assistant_id:1.1108",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323397:tag_1108"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:personal_assistant_id:1.7722",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3329687:tag_7722"
     },
     "MedicalProxyAuth": {
-        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:medical_proxy_auth:1.1121",
-        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3323399:tag_1121"
+        "schema_id": "BEjT63Lpv7ZuMbrmbUNwqx:2:medical_proxy_auth:1.7737",
+        "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3329689:tag_7737"
     }
 }
-
 # --- PYDANTIC MODELS (Strictly Identity & Issuance) ---
 class RegisterRequest(BaseModel):
     gov_id: str
@@ -137,6 +136,7 @@ def send_tx(tx):
 @app.get("/")
 def health_check():
     return {"status": "active", "protocol": "1", "mode": "ACA-Py Bridge"}
+
 
 @app.post("/protocol1/create-ssi-identity")
 async def create_ssi_identity(req: RegisterRequest):
@@ -339,176 +339,297 @@ async def link_wallet(req: LinkWalletRequest):
 
 
 
+# @app.post("/protocol3/issue-credential")
+# async def issue_credential(req: IssueCredentialRequest):
+#     print(f"\n--- 🚀 STARTING PROTOCOL 3 (ISSUANCE) ---")
+#     try:
+#         # 1. Map UI Inputs
+#         issuer_did = req.issuer_did
+#         connection_id = req.subject_did 
+        
+#         full_type = req.credential_data.get("type", "GenericLicense")
+#         clean_type = full_type.replace(" ", "") # e.g. "DeFiTradingLicense"
+        
+#         print(f"🔹 Issuing '{clean_type}' to Connection: {connection_id}...")
+
+#         # ---------------------------------------------------------
+#         # PART A: SEND TO PHONE (ACA-Py)
+#         # ---------------------------------------------------------
+#         print("🔹 Step A: Sending to BC Wallet via ACA-Py...")
+        
+#         # Get the correct Schema/CredDef IDs
+#         config = CRED_CONFIG.get(clean_type)
+#         if not config:
+#             print(f"⚠️ Warning: No Schema found for '{clean_type}'. Using Default.")
+#             config = CRED_CONFIG["DeFiTradingLicense"]
+
+#         # --- DYNAMIC ATTRIBUTE MAPPING (THE FIX) ---
+#         aca_py_attributes = []
+
+#         if clean_type == "DeFiTradingLicense":
+#             aca_py_attributes = [
+#                 {"name": "name", "value": req.credential_data.get("name", "User")},
+#                 {"name": "role", "value": req.credential_data.get("role", "Trader")},
+#                 {"name": "license_id", "value": f"LIC-{uuid.uuid4().hex[:12].upper()}"},
+#                 {"name": "expiration_date", "value": req.credential_data.get("expiry", "2026-12-31")}
+#             ]
+            
+#         elif clean_type == "PersonalAssistantID":
+#             aca_py_attributes = [
+#                 {"name": "name", "value": req.credential_data.get("name", "My AI Agent")},
+#                 {"name": "assistant_id", "value": f"AID-{uuid.uuid4().hex[:12].upper()}"}, # Schema expects 'assistant_id'
+#                 {"name": "access_level", "value": "Full Access"},                         # Schema expects 'access_level'
+#                 {"name": "expiration_date", "value": req.credential_data.get("expiry", "2026-12-31")}
+#             ]
+            
+#         elif clean_type == "MedicalProxyAuth":
+#             aca_py_attributes = [
+#                 {"name": "patient_name", "value": req.credential_data.get("name", "John Doe")}, # Mapping 'name' to 'patient_name'
+#                 {"name": "proxy_name", "value": "AI Medical Agent"},
+#                 {"name": "authorization_id", "value": f"MED-{uuid.uuid4().hex[:12].upper()}"},
+#                 {"name": "valid_until", "value": req.credential_data.get("expiry", "2026-12-31")} # Schema expects 'valid_until'
+#             ]
+        
+#         else:
+#             # Fallback for unknown types (Default to DeFi structure)
+#             aca_py_attributes = [
+#                 {"name": "name", "value": req.credential_data.get("name", "User")},
+#                 {"name": "role", "value": "Unknown"},
+#                 {"name": "license_id", "value": "Unknown"},
+#                 {"name": "expiration_date", "value": "2099-12-31"}
+#             ]
+
+#         async with httpx.AsyncClient() as client:
+#             aca_res = await client.post(
+#                 f"{ACAPY_ADMIN_URL}/issue-credential-2.0/send",
+#                 json={
+#                     "connection_id": connection_id,
+#                     "filter": {
+#                         "indy": {
+#                             "cred_def_id": config["cred_def_id"],
+#                             "schema_id": config["schema_id"]
+#                         }
+#                     },
+#                     "credential_preview": {
+#                         "@type": "issue-credential/2.0/credential-preview",
+#                         "attributes": aca_py_attributes
+#                     }
+#                 }
+#             )
+#             if aca_res.status_code != 200:
+#                 print(f"❌ ACA-Py Error: {aca_res.text}")
+#             else:
+#                 print(f"✅ Credential Offer Sent to Phone! (ExID: {aca_res.json()['cred_ex_id']})")
+
+#         # ---------------------------------------------------------
+#         # PART B: ANCHOR ON BLOCKCHAIN
+#         # ---------------------------------------------------------
+        
+#         # 2. Construct Credential JSON (For IPFS Record)
+#         # We include the 'aca_py_attributes' logic here so IPFS matches the Phone
+#         credential_subject = {attr["name"]: attr["value"] for attr in aca_py_attributes}
+#         credential_subject["id"] = connection_id
+
+#         credential = {
+#             "@context": ["https://www.w3.org/2018/credentials/v1"],
+#             "id": f"urn:uuid:{uuid.uuid4()}",
+#             "type": ["VerifiableCredential", clean_type],
+#             "issuer": issuer_did,
+#             "issuanceDate": datetime.utcnow().isoformat() + "Z",
+#             "expirationDate": req.credential_data.get("expiry", "2026-12-31"),
+#             "credentialSubject": credential_subject
+#         }
+
+#         # 3. Upload to IPFS
+#         print("🔹 Step M7: Uploading to IPFS...")
+#         async with httpx.AsyncClient() as client:
+#             files = {'file': json.dumps(credential)}
+#             ipfs_res = await client.post(IPFS_API_URL, files=files)
+#             if ipfs_res.status_code != 200: 
+#                 raise HTTPException(status_code=500, detail="IPFS Error")
+#             ipfs_cid_str = ipfs_res.json()["Hash"]
+#             print(f"   ↳ 📦 IPFS CID: {ipfs_cid_str}")
+
+#         # 4. Anchor on Ethereum (Step M8)
+#         # print("🔹 Step M8: Anchoring Metadata on Ethereum...")
+        
+#         # # Prepare Hash Arguments
+#         # cred_id_string = f"cred_{connection_id[:8]}_{clean_type}"
+        
+#         # Grab the unique ID (LIC-xxx, AID-xxx, or MED-xxx) from the attributes
+#         unique_id = aca_py_attributes[2]["value"]
+#         cred_id_string = f"cred_{unique_id}"
+        
+#         b_credID = w3.keccak(text=cred_id_string)
+#         b_issuerDID = w3.keccak(text=issuer_did)
+#         b_holderDID = w3.keccak(text=connection_id)
+#         b_ipfsCID = w3.keccak(text=ipfs_cid_str)
+#         b_credHash = w3.keccak(text=json.dumps(credential, sort_keys=True))
+#         duration = 31536000 # 1 year
+
+#         # Execute Transaction
+#         tx = cred_contract.functions.issueCredential(
+#             b_credID, b_issuerDID, b_holderDID, b_ipfsCID, b_credHash, duration
+#         ).build_transaction({
+#             'from': w3.eth.accounts[0],
+#             'nonce': w3.eth.get_transaction_count(w3.eth.accounts[0]),
+#             'gas': 2000000,
+#             'gasPrice': w3.to_wei('1', 'gwei')
+#         })
+
+#         # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
+        
+#         # # Robust Raw Transaction Extraction
+#         # raw_tx = None
+#         # if hasattr(signed_tx, "rawTransaction"): raw_tx = signed_tx.rawTransaction
+#         # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx: raw_tx = signed_tx["rawTransaction"]
+#         # else:
+#         #     try: raw_tx = signed_tx[0]
+#         #     except: pass
+
+#         # if raw_tx is None: raise Exception("Could not extract raw transaction bytes")
+
+#         # tx_hash = w3.eth.send_raw_transaction(raw_tx)
+#         # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+#         tx_hash, receipt = send_tx(tx)
+
+#         print(f"✅ PROTOCOL 3 COMPLETE. Anchored at: {w3.to_hex(tx_hash)}")
+        
+#         return {
+#             "status": "success",
+#             "ipfs_cid": ipfs_cid_str,
+#             "tx_hash": w3.to_hex(tx_hash),
+#             "view_url": f"http://127.0.0.1:8080/ipfs/{ipfs_cid_str}",
+#             "message": "Credential Sent to Phone AND Anchored on Chain",
+#             "license_id": unique_id  # <--- THIS WAS MISSING
+#         }
+
+#     except Exception as e:
+#         print(f"❌ P3 FAILED: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
+
+ID_PREFIX = {"DeFiTradingLicense": "LIC", "PersonalAssistantID": "AID", "MedicalProxyAuth": "MED"}
+
 @app.post("/protocol3/issue-credential")
 async def issue_credential(req: IssueCredentialRequest):
-    print(f"\n--- 🚀 STARTING PROTOCOL 3 (ISSUANCE) ---")
+    print("\n--- 🚀 STARTING PROTOCOL 3 (ISSUANCE) ---")
     try:
-        # 1. Map UI Inputs
         issuer_did = req.issuer_did
-        connection_id = req.subject_did 
-        
-        full_type = req.credential_data.get("type", "GenericLicense")
-        clean_type = full_type.replace(" ", "") # e.g. "DeFiTradingLicense"
-        
-        print(f"🔹 Issuing '{clean_type}' to Connection: {connection_id}...")
-
-        # ---------------------------------------------------------
-        # PART A: SEND TO PHONE (ACA-Py)
-        # ---------------------------------------------------------
-        print("🔹 Step A: Sending to BC Wallet via ACA-Py...")
-        
-        # Get the correct Schema/CredDef IDs
+        connection_id = req.subject_did
+        clean_type = req.credential_data.get("type", "").replace(" ", "")
         config = CRED_CONFIG.get(clean_type)
         if not config:
-            print(f"⚠️ Warning: No Schema found for '{clean_type}'. Using Default.")
-            config = CRED_CONFIG["DeFiTradingLicense"]
+            raise HTTPException(status_code=400, detail=f"Unknown credential type '{clean_type}'")
 
-        # --- DYNAMIC ATTRIBUTE MAPPING (THE FIX) ---
-        aca_py_attributes = []
+        cd = req.credential_data
+        expiry = cd.get("expiry", "2026-12-31")
+        # Generate the ID ONCE; it goes into the attributes AND the on-chain key
+        unique_id = f"{ID_PREFIX[clean_type]}-{uuid.uuid4().hex[:12].upper()}"
 
+        # 1. BUILD ATTRIBUTES
         if clean_type == "DeFiTradingLicense":
-            aca_py_attributes = [
-                {"name": "name", "value": req.credential_data.get("name", "User")},
-                {"name": "role", "value": req.credential_data.get("role", "Trader")},
-                {"name": "license_id", "value": f"LIC-{uuid.uuid4().hex[:12].upper()}"},
-                {"name": "expiration_date", "value": req.credential_data.get("expiry", "2026-12-31")}
+            attrs = [
+                {"name": "name", "value": cd.get("name", "User")},
+                {"name": "role", "value": cd.get("role", "Trader")},
+                {"name": "license_id", "value": unique_id},
+                {"name": "expiration_date", "value": expiry},
             ]
-            
         elif clean_type == "PersonalAssistantID":
-            aca_py_attributes = [
-                {"name": "name", "value": req.credential_data.get("name", "My AI Agent")},
-                {"name": "assistant_id", "value": f"AID-{uuid.uuid4().hex[:12].upper()}"}, # Schema expects 'assistant_id'
-                {"name": "access_level", "value": "Full Access"},                         # Schema expects 'access_level'
-                {"name": "expiration_date", "value": req.credential_data.get("expiry", "2026-12-31")}
+            attrs = [
+                {"name": "name", "value": cd.get("name", "My AI Agent")},
+                {"name": "assistant_id", "value": unique_id},
+                {"name": "access_level", "value": "Full Access"},
+                {"name": "expiration_date", "value": expiry},
             ]
-            
-        elif clean_type == "MedicalProxyAuth":
-            aca_py_attributes = [
-                {"name": "patient_name", "value": req.credential_data.get("name", "John Doe")}, # Mapping 'name' to 'patient_name'
+        else:  # MedicalProxyAuth
+            attrs = [
+                {"name": "patient_name", "value": cd.get("name", "John Doe")},
                 {"name": "proxy_name", "value": "AI Medical Agent"},
-                {"name": "authorization_id", "value": f"MED-{uuid.uuid4().hex[:12].upper()}"},
-                {"name": "valid_until", "value": req.credential_data.get("expiry", "2026-12-31")} # Schema expects 'valid_until'
-            ]
-        
-        else:
-            # Fallback for unknown types (Default to DeFi structure)
-            aca_py_attributes = [
-                {"name": "name", "value": req.credential_data.get("name", "User")},
-                {"name": "role", "value": "Unknown"},
-                {"name": "license_id", "value": "Unknown"},
-                {"name": "expiration_date", "value": "2099-12-31"}
+                {"name": "authorization_id", "value": unique_id},
+                {"name": "valid_until", "value": expiry},
             ]
 
-        async with httpx.AsyncClient() as client:
-            aca_res = await client.post(
-                f"{ACAPY_ADMIN_URL}/issue-credential-2.0/send",
-                json={
-                    "connection_id": connection_id,
-                    "filter": {
-                        "indy": {
-                            "cred_def_id": config["cred_def_id"],
-                            "schema_id": config["schema_id"]
-                        }
-                    },
-                    "credential_preview": {
-                        "@type": "issue-credential/2.0/credential-preview",
-                        "attributes": aca_py_attributes
-                    }
-                }
-            )
-            if aca_res.status_code != 200:
-                print(f"❌ ACA-Py Error: {aca_res.text}")
-            else:
-                print(f"✅ Credential Offer Sent to Phone! (ExID: {aca_res.json()['cred_ex_id']})")
-
-        # ---------------------------------------------------------
-        # PART B: ANCHOR ON BLOCKCHAIN
-        # ---------------------------------------------------------
-        
-        # 2. Construct Credential JSON (For IPFS Record)
-        # We include the 'aca_py_attributes' logic here so IPFS matches the Phone
-        credential_subject = {attr["name"]: attr["value"] for attr in aca_py_attributes}
+        credential_subject = {a["name"]: a["value"] for a in attrs}
         credential_subject["id"] = connection_id
-
         credential = {
             "@context": ["https://www.w3.org/2018/credentials/v1"],
             "id": f"urn:uuid:{uuid.uuid4()}",
             "type": ["VerifiableCredential", clean_type],
             "issuer": issuer_did,
             "issuanceDate": datetime.utcnow().isoformat() + "Z",
-            "expirationDate": req.credential_data.get("expiry", "2026-12-31"),
-            "credentialSubject": credential_subject
+            "expirationDate": expiry,
+            "credentialSubject": credential_subject,
         }
 
-        # 3. Upload to IPFS
-        print("🔹 Step M7: Uploading to IPFS...")
+        # 2. IPFS
         async with httpx.AsyncClient() as client:
-            files = {'file': json.dumps(credential)}
-            ipfs_res = await client.post(IPFS_API_URL, files=files)
-            if ipfs_res.status_code != 200: 
-                raise HTTPException(status_code=500, detail="IPFS Error")
-            ipfs_cid_str = ipfs_res.json()["Hash"]
-            print(f"   ↳ 📦 IPFS CID: {ipfs_cid_str}")
+            ipfs_res = await client.post(IPFS_API_URL, files={"file": json.dumps(credential)})
+        if ipfs_res.status_code != 200:
+            raise HTTPException(status_code=502, detail="IPFS upload failed")
+        ipfs_cid = ipfs_res.json()["Hash"]
 
-        # 4. Anchor on Ethereum (Step M8)
-        # print("🔹 Step M8: Anchoring Metadata on Ethereum...")
-        
-        # # Prepare Hash Arguments
-        # cred_id_string = f"cred_{connection_id[:8]}_{clean_type}"
-        
-        # Grab the unique ID (LIC-xxx, AID-xxx, or MED-xxx) from the attributes
-        unique_id = aca_py_attributes[2]["value"]
-        cred_id_string = f"cred_{unique_id}"
-        
-        b_credID = w3.keccak(text=cred_id_string)
-        b_issuerDID = w3.keccak(text=issuer_did)
-        b_holderDID = w3.keccak(text=connection_id)
-        b_ipfsCID = w3.keccak(text=ipfs_cid_str)
-        b_credHash = w3.keccak(text=json.dumps(credential, sort_keys=True))
-        duration = 31536000 # 1 year
-
-        # Execute Transaction
+        # 3. ANCHOR ON-CHAIN (reverts raise before the phone is touched)
+        b_credID = w3.keccak(text=f"cred_{unique_id}")
         tx = cred_contract.functions.issueCredential(
-            b_credID, b_issuerDID, b_holderDID, b_ipfsCID, b_credHash, duration
+            b_credID,
+            w3.keccak(text=issuer_did),
+            w3.keccak(text=connection_id),
+            w3.keccak(text=ipfs_cid),
+            w3.keccak(text=json.dumps(credential, sort_keys=True)),
+            31536000,
         ).build_transaction({
             'from': w3.eth.accounts[0],
             'nonce': w3.eth.get_transaction_count(w3.eth.accounts[0]),
             'gas': 2000000,
-            'gasPrice': w3.to_wei('1', 'gwei')
+            'gasPrice': w3.to_wei('1', 'gwei'),
         })
+        tx_hash, _ = send_tx(tx)
 
-        # signed_tx = w3.eth.account.sign_transaction(tx, ADMIN_PRIVATE_KEY)
-        
-        # # Robust Raw Transaction Extraction
-        # raw_tx = None
-        # if hasattr(signed_tx, "rawTransaction"): raw_tx = signed_tx.rawTransaction
-        # elif isinstance(signed_tx, dict) and "rawTransaction" in signed_tx: raw_tx = signed_tx["rawTransaction"]
-        # else:
-        #     try: raw_tx = signed_tx[0]
-        #     except: pass
+        # 4. DELIVER TO WALLET
+        async with httpx.AsyncClient() as client:
+            aca_res = await client.post(
+                f"{ACAPY_ADMIN_URL}/issue-credential-2.0/send",
+                json={
+                    "connection_id": connection_id,
+                    "filter": {"indy": {"cred_def_id": config["cred_def_id"],
+                                        "schema_id": config["schema_id"]}},
+                    "credential_preview": {
+                        "@type": "issue-credential/2.0/credential-preview",
+                        "attributes": attrs,
+                    },
+                },
+            )
 
-        # if raw_tx is None: raise Exception("Could not extract raw transaction bytes")
-
-        # tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        # receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        tx_hash, receipt = send_tx(tx)
+        if aca_res.status_code != 200:
+            # Compensate: the anchor exists but the holder never got the credential
+            try:
+                rtx = cred_contract.functions.revokeCredential(b_credID).build_transaction({
+                    'from': w3.eth.accounts[0],
+                    'nonce': w3.eth.get_transaction_count(w3.eth.accounts[0]),
+                    'gas': 2000000,
+                    'gasPrice': w3.to_wei('1', 'gwei'),
+                })
+                send_tx(rtx)
+            except Exception as ce:
+                print(f"⚠️ Compensating revoke failed: {ce}")
+            raise HTTPException(status_code=502,
+                                detail=f"Wallet delivery failed (anchor rolled back): {aca_res.text}")
 
         print(f"✅ PROTOCOL 3 COMPLETE. Anchored at: {w3.to_hex(tx_hash)}")
-        
         return {
             "status": "success",
-            "ipfs_cid": ipfs_cid_str,
+            "ipfs_cid": ipfs_cid,
             "tx_hash": w3.to_hex(tx_hash),
-            "view_url": f"http://127.0.0.1:8080/ipfs/{ipfs_cid_str}",
-            "message": "Credential Sent to Phone AND Anchored on Chain",
-            "license_id": unique_id  # <--- THIS WAS MISSING
+            "view_url": f"http://127.0.0.1:8080/ipfs/{ipfs_cid}",
+            "message": "Anchored on chain, then delivered to wallet",
+            "license_id": unique_id,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ P3 FAILED: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 # ==========================================
 # PROTOCOL 5: REVOCATION
@@ -529,16 +650,13 @@ async def revoke_credential(req: RevokeRequest):
         target_hash = w3.keccak(text=target_str)
         
         # Check Status on Chain
-        status = cred_contract.functions.verifyCredential(target_hash).call()
-        
-        if status[0] == False:
-            print("   ❌ CRITICAL: Credential Not Found on Chain.")
-            return {
-                "status": "error", 
-                "detail": f"Credential Anchor '{target_str}' not found. Did you use the exact License ID?"
-            }
+        valid, status_str = cred_contract.functions.verifyCredential(target_hash).call()
+        if status_str == "Not Found":
+            return {"status": "error", "detail": f"'{target_str}' not found on chain"}
+        if status_str == "Revoked":
+            return {"status": "error", "detail": "Already revoked"}
             
-        print(f"      ✅ FOUND! Current Status: {status[1]}")
+        print(f"      ✅ FOUND! Current Status: {status_str}")
         
         print(f"🔹 Step M2: Revoking Target: {target_str}...")
         
@@ -580,50 +698,56 @@ async def revoke_credential(req: RevokeRequest):
         print(f"❌ REVOCATION FAILED: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/protocol5/debug-check/{connection_id}")
-async def debug_check_credential(connection_id: str):
-    """
-    Forensic Tool: Checks ALL known license types for a connection ID
-    to see what actually exists on the blockchain.
-    """
-    # 1. Prepare the Short ID (First 8 chars)
-    # This is how Protocol 3 saved it.
-    short_id = connection_id.strip()[:8]
+# @app.get("/protocol5/debug-check/{connection_id}")
+# async def debug_check_credential(connection_id: str):
+#     """
+#     Forensic Tool: Checks ALL known license types for a connection ID
+#     to see what actually exists on the blockchain.
+#     """
+#     # 1. Prepare the Short ID (First 8 chars)
+#     # This is how Protocol 3 saved it.
+#     short_id = connection_id.strip()[:8]
     
-    # 2. List of all Types we support
-    known_types = [
-        "DeFiTradingLicense", 
-        "PersonalAssistantID", 
-        "MedicalProxyAuth",
-        "TradingLicense" # Legacy
-    ]
+#     # 2. List of all Types we support
+#     known_types = [
+#         "DeFiTradingLicense", 
+#         "PersonalAssistantID", 
+#         "MedicalProxyAuth",
+#         "TradingLicense" # Legacy
+#     ]
     
-    found_records = []
+#     found_records = []
     
-    print(f"\n--- 🕵️ DEBUG: INSPECTING CHAIN FOR {short_id} ---")
+#     print(f"\n--- 🕵️ DEBUG: INSPECTING CHAIN FOR {short_id} ---")
 
-    for c_type in known_types:
-        # Reconstruct the Key
-        candidate_key = f"cred_{short_id}_{c_type}"
-        candidate_hash = w3.keccak(text=candidate_key)
+#     for c_type in known_types:
+#         # Reconstruct the Key
+#         candidate_key = f"cred_{short_id}_{c_type}"
+#         candidate_hash = w3.keccak(text=candidate_key)
         
-        # Ask Solidity
-        status = cred_contract.functions.verifyCredential(candidate_hash).call()
+#         # Ask Solidity
+#         status = cred_contract.functions.verifyCredential(candidate_hash).call()
         
-        print(f"   Checking: {candidate_key} -> {status[1]}")
+#         print(f"   Checking: {candidate_key} -> {status[1]}")
         
-        if status[0] == True: # If exists
-            found_records.append({
-                "type": c_type,
-                "key": candidate_key,
-                "status": status[1] # "Active" or "Revoked"
-            })
+#         if status[0] == True: # If exists
+#             found_records.append({
+#                 "type": c_type,
+#                 "key": candidate_key,
+#                 "status": status[1] # "Active" or "Revoked"
+#             })
 
-    return {
-        "searched_id": short_id,
-        "found_records": found_records,
-        "message": f"Found {len(found_records)} records on chain."
-    }
+#     return {
+#         "searched_id": short_id,
+#         "found_records": found_records,
+#         "message": f"Found {len(found_records)} records on chain."
+#     }
+
+@app.get("/protocol5/debug-check/{license_id}")
+async def debug_check_credential(license_id: str):
+    key = f"cred_{license_id.strip()}"
+    valid, status = cred_contract.functions.verifyCredential(w3.keccak(text=key)).call()
+    return {"key": key, "valid": valid, "status": status}
 # --- PROTOCOL 6: DELEGATION MANAGEMENT ---
 
 

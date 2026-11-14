@@ -1,33 +1,38 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-/**
- * @title AgentRegistry
- * @notice Protocol 2: AI Agent Identity & Ownership
- */
-contract AgentRegistry {
+interface IDIDRegistry {
+    function verifyOwnership(bytes32 _did, address _wallet) external view returns (bool);
+}
 
+contract AgentRegistry {
     struct AgentProfile {
-        bytes32 agentDID;       // The SSI DID (from ACA-Py)
-        bytes32 ownerDID;       // The Human Owner's DID
-        bytes32 modelHash;      // The AI Model Fingerprint (Step M2)
+        bytes32 agentDID;
+        bytes32 ownerDID;
+        bytes32 modelHash;
         uint256 registeredAt;
         bool active;
     }
 
-    // Map: Agent DID Hash -> Profile
+    IDIDRegistry public immutable didRegistry;
+
     mapping(bytes32 => AgentProfile) public agents;
-    
-    // Map: Human DID Hash -> List of Agent DIDs (Forward Accountability)
     mapping(bytes32 => bytes32[]) public ownerToAgents;
 
     event AgentRegistered(bytes32 indexed agentDID, bytes32 indexed ownerDID, bytes32 modelHash);
 
-    function registerAgent(bytes32 _agentDID, bytes32 _ownerDID, bytes32 _modelHash) external {
-        // 1. Check if already registered
-        require(!agents[_agentDID].active, "Agent DID already exists!");
+    constructor(address _didRegistry) {
+        didRegistry = IDIDRegistry(_didRegistry);
+    }
 
-        // 2. Store the Link
+    function registerAgent(
+        bytes32 _agentDID,
+        bytes32 _ownerDID,
+        bytes32 _modelHash
+    ) external {
+        require(!agents[_agentDID].active, "Agent DID already exists!");
+        require(didRegistry.verifyOwnership(_ownerDID, msg.sender), "Caller does not own ownerDID");
+
         agents[_agentDID] = AgentProfile({
             agentDID: _agentDID,
             ownerDID: _ownerDID,
@@ -36,13 +41,10 @@ contract AgentRegistry {
             active: true
         });
 
-        // 3. Update Ownership Record
         ownerToAgents[_ownerDID].push(_agentDID);
-
         emit AgentRegistered(_agentDID, _ownerDID, _modelHash);
     }
 
-    // Helper to check if a Human owns an Agent
     function verifyOwnership(bytes32 _humanDID, bytes32 _agentDID) external view returns (bool) {
         return agents[_agentDID].ownerDID == _humanDID;
     }
