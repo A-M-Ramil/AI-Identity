@@ -32,6 +32,9 @@ import uuid
 
 import httpx
 import web3
+from eth_abi import encode as abi_encode
+from eth_account import Account
+from eth_account.messages import encode_defunct
 from web3 import Web3
 from web3.exceptions import ContractLogicError
 
@@ -55,6 +58,8 @@ REASONS = {
     "agent_exists": "Agent DID already exists",
     "access_denied": "ACCESS DENIED",
     "no_delegation": "No active delegation",
+    "not_registered": "AGENT NOT REGISTERED",
+    "bad_agent_sig": "Invalid agent signature",
 }
 
 # USD conversion assumptions (inputs, not measurements)
@@ -76,6 +81,8 @@ A_EXPIRE = w3.eth.accounts[5]
 A_NONOWNER = w3.eth.accounts[6]
 
 RESULTS = {}
+RIG = {}                         # shared rig state (owner DID that the fixed agents are bound to)
+BINDING_TAG = Web3.keccak(text="DualID.AgentBinding.v1")
 
 
 # ==============================================================================
@@ -99,13 +106,56 @@ def summarize(xs):
     }
 
 
+def _addr(sender):
+    return sender.address if hasattr(sender, "key") else sender
+
+
 def send(fn, sender, gas=None):
-    """Transact and WAIT for the receipt. Returns the receipt."""
-    params = {"from": sender}
-    if gas:
-        params["gas"] = gas
-    h = fn.transact(params)
+    """Transact and WAIT for the receipt. sender: unlocked Anvil address or LocalAccount."""
+    if hasattr(sender, "key"):
+        tx = fn.build_transaction({
+            "from": sender.address,
+            "nonce": w3.eth.get_transaction_count(sender.address, "pending"),
+            "gas": gas or 500000,
+            "gasPrice": w3.to_wei("1", "gwei")})
+        signed = w3.eth.account.sign_transaction(tx, sender.key)
+        raw = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction")
+        h = w3.eth.send_raw_transaction(raw)
+    else:
+        params = {"from": sender}
+        if gas:
+            params["gas"] = gas
+        h = fn.transact(params)
     return w3.eth.wait_for_transaction_receipt(h)
+
+
+def fund(addr, eth=1.0):
+    rec = w3.eth.wait_for_transaction_receipt(
+        w3.eth.send_transaction({"from": OWNER, "to": addr, "value": w3.to_wei(eth, "ether")}))
+    assert rec.status == 1
+
+
+def binding_digest(agent_reg, agent_did, owner_did, model_hash, agent_addr):
+    """Must equal AgentRegistry.bindingDigest (checked once at deployment)."""
+    return Web3.keccak(abi_encode(
+        ["bytes32", "uint256", "address", "bytes32", "bytes32", "bytes32", "address"],
+        [BINDING_TAG, w3.eth.chain_id, agent_reg.address, agent_did, owner_did, model_hash, agent_addr]))
+
+
+def agent_signature(digest, addr, key=None):
+    """Agent proof of possession: local key if given, else eth_sign by the unlocked Anvil account."""
+    if key is not None:
+        return Account.sign_message(encode_defunct(primitive=digest), private_key=key).signature
+    return w3.eth.sign(addr, data=digest)
+
+
+def register_agent_fn(agent_reg, owner_did, addr, key=None, agent_did=None, model_hash=None, sig_by=None):
+    """Build registerAgent(...). sig_by=(addr, key) lets a DIFFERENT key sign (forged-consent test)."""
+    agent_did = agent_did if agent_did is not None else w3.keccak(text=f"agent_{uuid.uuid4().hex}")
+    model_hash = model_hash if model_hash is not None else w3.keccak(text="model")
+    s_addr, s_key = sig_by if sig_by is not None else (addr, key)
+    sig = agent_signature(binding_digest(agent_reg, agent_did, owner_did, model_hash, addr), s_addr, s_key)
+    return agent_reg.functions.registerAgent(agent_did, owner_did, model_hash, addr, sig), agent_did
 
 
 def must(fn, sender, gas=None):
@@ -124,7 +174,7 @@ def attack(fn, sender, expect_reason, state_unchanged):
       3. state_unchanged() is True afterwards
     """
     try:
-        fn.call({"from": sender})
+        fn.call({"from": _addr(sender)})
         sim_ok, reason = False, "(call succeeded: attack would work)"
     except Exception as e:  # ContractLogicError or RPC error; judged by reason
         reason = str(e)
@@ -246,7 +296,8 @@ def deploy_all():
     did_reg, g1 = deploy("DIDRegistry.json", ["registerDID", "verifyOwnership"], 0)
     agent_reg, g2 = deploy(
         "AgentRegistry.json",
-        ["registerAgent", "verifyOwnership", "agents", "ownerToAgents", "didRegistry"],
+        ["registerAgent", "verifyOwnership", "agents", "ownerToAgents", "didRegistry",
+         "isAgentOf", "deactivateAgent", "bindingDigest", "agentDIDByAddress"],
         1, did_reg.address,
     )
     cred_reg, g3 = deploy(
@@ -259,7 +310,8 @@ def deploy_all():
         ["setPermission", "revokePermission", "checkPermission", "permissions"],
         0,
     )
-    wallet, g5 = deploy("AgentWallet.json", ["executeTrade"], 2, OWNER, deleg_reg.address)
+    wallet, g5 = deploy("AgentWallet.json", ["executeTrade", "agentRegistry"], 3,
+                        OWNER, deleg_reg.address, agent_reg.address)
 
     assert cred_reg.functions.issuer().call() == OWNER, "issuer() is not the owner account"
     if w3.eth.get_balance(OWNER) < w3.to_wei(200, "ether"):
@@ -268,7 +320,18 @@ def deploy_all():
         w3.eth.send_transaction({"from": OWNER, "to": wallet.address, "value": w3.to_wei(100, "ether")}))
     assert frec.status == 1, "AgentWallet funding tx reverted"
     assert w3.eth.get_balance(wallet.address) >= w3.to_wei(100, "ether"), "AgentWallet not funded"
-    print(f"  AgentWallet funded: {w3.from_wei(w3.eth.get_balance(wallet.address), 'ether')} ETH\n")
+    print(f"  AgentWallet funded: {w3.from_wei(w3.eth.get_balance(wallet.address), 'ether')} ETH")
+
+    probe = (w3.keccak(text="p1"), w3.keccak(text="p2"), w3.keccak(text="p3"), A_CONTROL)
+    assert bytes(agent_reg.functions.bindingDigest(*probe).call()) == bytes(binding_digest(agent_reg, *probe)), \
+        "Agent binding digest mismatch between Python and Solidity"
+    owner_did = w3.keccak(text=f"rig_owner_{uuid.uuid4().hex}")
+    must(did_reg.functions.registerDID(owner_did, w3.keccak(text="cid"), w3.keccak(text=f"gov_{uuid.uuid4().hex}")), OWNER)
+    RIG["owner_did"] = owner_did
+    for a in (A_CONTROL, A_REVOKE, A_LIMIT, A_EXPIRE):
+        fn, _ = register_agent_fn(agent_reg, owner_did, a)
+        must(fn, OWNER)
+    print("  Binding digest Python == Solidity; fixed agent accounts bound in AgentRegistry\n")
 
     RESULTS["deployment_gas"] = {
         "DIDRegistry": g1, "AgentRegistry": g2, "CredentialRegistry": g3,
@@ -295,13 +358,16 @@ def gas_profile(did_reg, agent_reg, cred_reg, deleg_reg, wallet):
     r = must(did_reg.functions.registerDID(owner_did, w3.keccak(text="cid"), w3.keccak(text=f"gov_{uuid.uuid4().hex}")), OWNER)
     rec_row("P1 registerDID", r.gasUsed)
 
-    a1 = w3.keccak(text=f"gp_a1_{uuid.uuid4().hex}")
-    a2 = w3.keccak(text=f"gp_a2_{uuid.uuid4().hex}")
     mh = w3.keccak(text="model")
-    r = must(agent_reg.functions.registerAgent(a1, owner_did, mh), OWNER)
-    rec_row("P2 registerAgent (owner's 1st agent)", r.gasUsed, "new array slot")
-    r = must(agent_reg.functions.registerAgent(a2, owner_did, mh), OWNER)
-    rec_row("P2 registerAgent (owner's 2nd+ agent)", r.gasUsed)
+    k1, k2 = Account.create(), Account.create()
+    fn, a1 = register_agent_fn(agent_reg, owner_did, k1.address, k1.key, model_hash=mh)
+    r = must(fn, OWNER)
+    rec_row("P2 registerAgent (owner's 1st agent)", r.gasUsed, "new array slot + sig check")
+    fn, a2 = register_agent_fn(agent_reg, owner_did, k2.address, k2.key, model_hash=mh)
+    r = must(fn, OWNER)
+    rec_row("P2 registerAgent (owner's 2nd+ agent)", r.gasUsed, "sig check")
+    r = must(agent_reg.functions.deactivateAgent(a2), OWNER)
+    rec_row("P2 deactivateAgent", r.gasUsed)
 
     cid = w3.keccak(text=f"gp_cred_{uuid.uuid4().hex}")
     r = must(cred_reg.functions.issueCredential(cid, owner_did, a1, w3.keccak(text="c"), w3.keccak(text="h"), 31536000), OWNER)
@@ -366,22 +432,26 @@ def security_scenarios(did_reg, agent_reg, cred_reg, deleg_reg, wallet, repeats)
             lambda: cred_reg.functions.credentials(cid).call()[5] == 0)
         return b, r, True
 
-    def scn_s3():  # register agent under victim's owner DID
-        agent = w3.keccak(text=f"sec_rogue_{uuid.uuid4().hex}")
-        b, r = attack(agent_reg.functions.registerAgent(agent, owner_did, w3.keccak(text="evil")),
-                      ATTACKER, REASONS["not_owner_did"],
+    def scn_s3():  # register agent under victim's owner DID (attacker holds a valid agent key)
+        k = Account.create()
+        fn, agent = register_agent_fn(agent_reg, owner_did, k.address, k.key, model_hash=w3.keccak(text="evil"))
+        b, r = attack(fn, ATTACKER, REASONS["not_owner_did"],
                       lambda: agent_reg.functions.agents(agent).call()[4] is False)
         # positive control: the real owner can register under the same DID
-        ctrl = send(agent_reg.functions.registerAgent(
-            w3.keccak(text=f"sec_legit_{uuid.uuid4().hex}"), owner_did, w3.keccak(text="m")), OWNER).status == 1
+        k2 = Account.create()
+        fn2, _ = register_agent_fn(agent_reg, owner_did, k2.address, k2.key)
+        ctrl = send(fn2, OWNER).status == 1
         return b, r, ctrl
 
     def scn_s3b():  # duplicate agent DID re-registration (even by the owner)
-        agent = w3.keccak(text=f"sec_dup_{uuid.uuid4().hex}")
-        must(agent_reg.functions.registerAgent(agent, owner_did, w3.keccak(text="orig")), OWNER)
+        k = Account.create()
+        fn, agent = register_agent_fn(agent_reg, owner_did, k.address, k.key, model_hash=w3.keccak(text="orig"))
+        must(fn, OWNER)
         orig = agent_reg.functions.agents(agent).call()[2]
-        b, r = attack(agent_reg.functions.registerAgent(agent, owner_did, w3.keccak(text="overwrite")),
-                      OWNER, REASONS["agent_exists"],
+        k2 = Account.create()
+        fn2, _ = register_agent_fn(agent_reg, owner_did, k2.address, k2.key,
+                                   agent_did=agent, model_hash=w3.keccak(text="overwrite"))
+        b, r = attack(fn2, OWNER, REASONS["agent_exists"],
                       lambda: agent_reg.functions.agents(agent).call()[2] == orig)
         return b, r, True
 
@@ -440,6 +510,40 @@ def security_scenarios(did_reg, agent_reg, cred_reg, deleg_reg, wallet, repeats)
                       REASONS["access_denied"], lambda: wallet_bal() == bal)
         return b, r, ctrl
 
+    def scn_s10():  # agent with a valid delegation but NO registered identity
+        k = Account.create()
+        fund(k.address)
+        must(deleg_reg.functions.setPermission(k.address, w3.to_wei(1, "ether"), 3600), OWNER)
+        bal = wallet_bal()
+        b, r = attack(wallet.functions.executeTrade(DEAD, w3.to_wei(0.01, "ether")), k,
+                      REASONS["not_registered"], lambda: wallet_bal() == bal)
+        # control: a registered + delegated agent trades
+        ctrl = send(wallet.functions.executeTrade(DEAD, w3.to_wei(0.01, "ether")), A_CONTROL, gas=200000).status == 1
+        return b, r, ctrl
+
+    def scn_s11():  # owner binds an agent key WITHOUT that key's signature (forged consent)
+        victim, other = Account.create(), Account.create()
+        fn, _ = register_agent_fn(agent_reg, owner_did, victim.address, victim.key,
+                                  sig_by=(other.address, other.key))
+        b, r = attack(fn, OWNER, REASONS["bad_agent_sig"],
+                      lambda: bytes(agent_reg.functions.agentDIDByAddress(victim.address).call()) == bytes(32))
+        fn2, _ = register_agent_fn(agent_reg, owner_did, victim.address, victim.key)
+        ctrl = send(fn2, OWNER).status == 1
+        return b, r, ctrl
+
+    def scn_s12():  # deactivated agent identity cannot trade, even with a live delegation
+        k = Account.create()
+        fund(k.address)
+        fn, agent = register_agent_fn(agent_reg, owner_did, k.address, k.key)
+        must(fn, OWNER)
+        must(deleg_reg.functions.setPermission(k.address, w3.to_wei(1, "ether"), 3600), OWNER)
+        ctrl = send(wallet.functions.executeTrade(DEAD, w3.to_wei(0.01, "ether")), k, gas=200000).status == 1
+        must(agent_reg.functions.deactivateAgent(agent), OWNER)
+        bal = wallet_bal()
+        b, r = attack(wallet.functions.executeTrade(DEAD, w3.to_wei(0.01, "ether")), k,
+                      REASONS["not_registered"], lambda: wallet_bal() == bal)
+        return b, r, ctrl
+
     scenarios = [
         ("S1  Non-issuer revokes credential", scn_s1),
         ("S2  Non-issuer issues credential", scn_s2),
@@ -451,6 +555,9 @@ def security_scenarios(did_reg, agent_reg, cred_reg, deleg_reg, wallet, repeats)
         ("S7  Trade above delegated limit", scn_s7),
         ("S8  Non-owner revokes another's delegation", scn_s8),
         ("S9  Trade after delegation expired", scn_s9),
+        ("S10 Delegated but unregistered agent trades", scn_s10),
+        ("S11 Bind agent key without its signature", scn_s11),
+        ("S12 Trade after agent identity deactivated", scn_s12),
     ]
 
     table = []
@@ -526,7 +633,10 @@ async def latency_breakdown(did_reg, agent_reg, cred_reg, deleg_reg, wallet, n, 
             t_ipfs = (time.perf_counter() - t0) * 1000
             t0 = time.perf_counter()
             adid_h = w3.keccak(text=agent_did)
-            rec = must(agent_reg.functions.registerAgent(adid_h, did_h, w3.keccak(text=f"Llama-3-8B|1.0|{acid}")), OWNER)
+            ak = Account.create()
+            fn, _ = register_agent_fn(agent_reg, did_h, ak.address, ak.key, agent_did=adid_h,
+                                      model_hash=w3.keccak(text=f"Llama-3-8B|1.0|{acid}"))
+            rec = must(fn, OWNER)
             t_chain = (time.perf_counter() - t0) * 1000
             log("P2_registerAgent", t_aca, t_ipfs, t_chain, (time.perf_counter() - t_all) * 1000, rec.gasUsed, keep)
 
@@ -583,7 +693,7 @@ async def latency_breakdown(did_reg, agent_reg, cred_reg, deleg_reg, wallet, n, 
 # ==============================================================================
 # EXPERIMENT 4a: DIRECT SCALING (independent EOAs, repeated runs)
 # ==============================================================================
-async def direct_scaling(deleg_reg, wallet, repeats):
+async def direct_scaling(deleg_reg, wallet, agent_reg, repeats):
     print("=" * 78)
     print(f"DIRECT SCALING (rig -> chain, independent signers, {repeats} runs per N)")
     print("=" * 78)
@@ -594,6 +704,8 @@ async def direct_scaling(deleg_reg, wallet, repeats):
         w3.eth.wait_for_transaction_receipt(
             w3.eth.send_transaction({"from": OWNER, "to": a.address, "value": w3.to_wei(0.5, "ether")}))
         must(deleg_reg.functions.setPermission(a.address, w3.to_wei(5, "ether"), 360000), OWNER)
+        fn, _ = register_agent_fn(agent_reg, RIG["owner_did"], a.address, a.key)
+        must(fn, OWNER)
 
     def trade(acct):
         t0 = time.perf_counter()
@@ -706,7 +818,7 @@ async def main():
     security_scenarios(did_reg, agent_reg, cred_reg, deleg_reg, wallet, args.repeats)
     if not args.skip_latency:
         await latency_breakdown(did_reg, agent_reg, cred_reg, deleg_reg, wallet, args.n, args.warmup)
-    await direct_scaling(deleg_reg, wallet, args.repeats)
+    await direct_scaling(deleg_reg, wallet, agent_reg, args.repeats)
     if args.api:
         await api_scaling(args.owner_did, args.repeats)
 

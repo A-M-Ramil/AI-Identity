@@ -6,6 +6,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
+import os
+import hmac
+import hashlib
+import secrets
 
 # --- CONFIGURATION (ISSUER NODE) ---
 # 1. Blockchain (Anvil)
@@ -20,6 +24,28 @@ ADMIN_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf
 # 2. ACA-Py (The Identity Authority)
 ACAPY_ADMIN_URL = "http://127.0.0.1:8020" # <--- Node A (Issuer) Port
 IPFS_API_URL = "http://127.0.0.1:5001/api/v0/add"
+
+# Gov-ID privacy (P1): the chain stores HMAC-SHA256(pepper, gov_id), never keccak(gov_id).
+# Deterministic, so DIDRegistry.usedGovIDs still blocks duplicate IDs (anti-Sybil),
+# but without the issuer-held pepper the on-chain value cannot be brute-forced.
+GOV_ID_PEPPER_FILE = "gov_id_pepper.key"   # keep secret, back it up, never commit it
+
+def _load_gov_id_pepper() -> bytes:
+    env = os.environ.get("GOV_ID_PEPPER")
+    if env:
+        return bytes.fromhex(env)
+    if os.path.exists(GOV_ID_PEPPER_FILE):
+        with open(GOV_ID_PEPPER_FILE) as f:
+            return bytes.fromhex(f.read().strip())
+    pepper = secrets.token_bytes(32)
+    with open(GOV_ID_PEPPER_FILE, "w") as f:
+        f.write(pepper.hex())
+    return pepper
+
+GOV_ID_PEPPER = _load_gov_id_pepper()
+
+def gov_id_commitment(gov_id: str) -> bytes:
+    return hmac.new(GOV_ID_PEPPER, gov_id.strip().encode(), hashlib.sha256).digest()
 
 # Local DBs
 USER_WALLET_MAP = {}
@@ -180,12 +206,8 @@ async def create_ssi_identity(req: RegisterRequest):
                 "controller": f"did:sov:{ssi_did}",
                 "publicKeyBase58": verkey
             }],
-            "authentication": [f"did:sov:{ssi_did}#key-1"],
-            "service": [{
-                "id": f"did:sov:{ssi_did}#gov-id",
-                "type": "LinkedGovernmentID",
-                "serviceEndpoint": f"urn:gov:{req.gov_id}" 
-            }]
+            "authentication": [f"did:sov:{ssi_did}#key-1"]
+            # No government ID here: IPFS is public. The ID appears on-chain only as an HMAC commitment.
         }
 
         # Upload to IPFS Node
@@ -202,7 +224,7 @@ async def create_ssi_identity(req: RegisterRequest):
         # --- Step 3: Blockchain Anchoring (M9-M11) ---
         print("🔹 M9: Anchoring to Ethereum...")
         
-        gov_id_hash = w3.keccak(text=req.gov_id)
+        gov_id_hash = gov_id_commitment(req.gov_id)
         did_hash = w3.keccak(text=ssi_did)
         ipfs_cid_hash = w3.keccak(text=ipfs_cid)
 
@@ -749,10 +771,3 @@ async def debug_check_credential(license_id: str):
     valid, status = cred_contract.functions.verifyCredential(w3.keccak(text=key)).call()
     return {"key": key, "valid": valid, "status": status}
 # --- PROTOCOL 6: DELEGATION MANAGEMENT ---
-
-
-
-
-
-
-

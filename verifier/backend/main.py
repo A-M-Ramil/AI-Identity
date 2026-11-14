@@ -10,6 +10,8 @@ import uuid
 import os
 import asyncio
 import time
+from eth_abi import encode as abi_encode
+from eth_account.messages import encode_defunct
 
 AGENT_WALLET_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
 admin_nonce_lock = asyncio.Lock()
@@ -193,6 +195,17 @@ def get_agent_key(identifier):
             
     # If we get here, neither the DID nor the ETH address matched anything in the JSON
     return None
+
+# --- AGENT BINDING (P2): the agent key signs (agentDID, ownerDID, modelHash, address) ---
+# Must match AgentRegistry.bindingDigest(): abi.encode(BINDING_TAG, chainid, registry, ...)
+BINDING_TAG = Web3.keccak(text="DualID.AgentBinding.v1")
+
+def agent_binding_signature(agent_hash, owner_hash, model_hash, agent_address, agent_private_key):
+    digest = Web3.keccak(abi_encode(
+        ["bytes32", "uint256", "address", "bytes32", "bytes32", "bytes32", "address"],
+        [BINDING_TAG, w3.eth.chain_id, Web3.to_checksum_address(AGENT_REGISTRY_ADDRESS),
+         agent_hash, owner_hash, model_hash, Web3.to_checksum_address(agent_address)]))
+    return w3.eth.account.sign_message(encode_defunct(primitive=digest), private_key=agent_private_key).signature
 
 # --- UPDATED REQUEST MODELS ---
 class RegisterABCDRequest(BaseModel):
@@ -447,13 +460,17 @@ async def register_agent_abcd(req: RegisterABCDRequest):
 
         # C. BLOCKCHAIN ANCHORING (Thread-safe nonce lock for Admin Account[0])
         t_chain0 = time.perf_counter()
+        # Layer C binding: the agent key proves possession and consents to this owner + model
+        agent_sig = agent_binding_signature(agent_hash, owner_hash, model_hash, agent_address, agent_private_key)
         contract = w3.eth.contract(address=AGENT_REGISTRY_ADDRESS, abi=AGENT_REGISTRY_ABI)
         async with admin_nonce_lock:
             nonce = await asyncio.to_thread(w3.eth.get_transaction_count, w3.eth.accounts[0], 'pending')
             tx = contract.functions.registerAgent(
                 agent_hash,
                 owner_hash,
-                model_hash
+                model_hash,
+                agent_address,
+                agent_sig
             ).build_transaction({
                 'from': w3.eth.accounts[0],
                 'nonce': nonce,

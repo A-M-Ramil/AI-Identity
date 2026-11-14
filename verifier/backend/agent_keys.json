@@ -759,5 +759,41 @@
       "ver": "v2.1.5",
       "ipfs_cid": "Qmav5GaUMbFJsMx2N2XsFAEHjFNiY9vQ4L7ZzEZdKJpCLR"
     }
+  },
+  "7s4x7NhaDmkFYXWFMv1SDG": {
+    "private_key": "ab82d6178d4c99013423555f682ae17736f646cc24a64a46ff4627a5c476deac",
+    "address": "0x081899C7987B1949Ef556e6A7D54691cEb9E9F93",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "Qmaxx5p3E82t5g5Aon3uhK8HFpAWnGQ3fyhUgB6RMdRpGp"
+    }
+  },
+  "GaDQ3PRtk29g76dqbo5u1z": {
+    "private_key": "155090b25a85dee4552e21511258ca0225a3bdb07b9c0fcb745b63270dff51d4",
+    "address": "0xEeE045fCA0f0127FcB52E1Ad43c1F316180A7920",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmVDsSkTsDD1xQDDoqQpocbNBzjYSpPcTsK1uNsXghfoL4"
+    }
+  },
+  "37zRWKzkirJtpx3qKiWm68": {
+    "private_key": "e5224bd70eb2815904b1cc150558690cd9835a66b96a7907c4c46ca7816acb4c",
+    "address": "0xC280545293e786f082ac9d6b30dc4f0983e35836",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmYjMnjzEtLx46LbXpnQzgHLdDwLgYvskAZSaaVUNqpyc6"
+    }
+  },
+  "GAS63dqbMULJdyRgTyqMvX": {
+    "private_key": "b810216c3a7fc2ad7e9dd528ee31b808e2e7788284c905f7c5677b057a683b60",
+    "address": "0xc54b95A8451fc64b0f2398f2fa900a28852A9571",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmcbdP74HWU7TtuNaJ3Dcz9e7WBxYsGBAJHXyjmyhL6wo2"
+    }
   }
 }
