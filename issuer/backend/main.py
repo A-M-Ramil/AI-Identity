@@ -583,9 +583,24 @@ async def issue_credential(req: IssueCredentialRequest):
             "credentialSubject": credential_subject,
         }
 
-        # 2. IPFS
+        # 2. IPFS (public). Only non-identifying metadata goes here: no subject
+        # attributes, no licence id, no holder reference. The attributes travel only
+        # inside the AnonCreds credential over DIDComm, which keeps selective
+        # disclosure intact. The full credential stays committed on chain via credHash.
+        public_record = {
+            "@context": credential["@context"],
+            "id": credential["id"],
+            "type": credential["type"],
+            "issuer": issuer_did,
+            "issuanceDate": credential["issuanceDate"],
+            "expirationDate": expiry,
+            "credentialStatus": {
+                "type": "DualIDOnChainStatus",
+                "registry": CREDENTIAL_REGISTRY_ADDRESS,
+            },
+        }
         async with httpx.AsyncClient() as client:
-            ipfs_res = await client.post(IPFS_API_URL, files={"file": json.dumps(credential)})
+            ipfs_res = await client.post(IPFS_API_URL, files={"file": json.dumps(public_record)})
         if ipfs_res.status_code != 200:
             raise HTTPException(status_code=502, detail="IPFS upload failed")
         ipfs_cid = ipfs_res.json()["Hash"]

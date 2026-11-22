@@ -124,7 +124,7 @@ services:
       - ACAPY_WALLET_SEED=thesis_demo_verifier_seed_000001 # 32 chars
       
       # NOTE: You will need to put your second Ngrok URL here
-      - ACAPY_ENDPOINT=https://thesis-verifier.loca.lt
+      - ACAPY_ENDPOINT=https://fszah-59-153-103-22.free.pinggy.net
       
       - ACAPY_LABEL=DeFi_Platform
       - ACAPY_INBOUND_TRANSPORT=[["http", "0.0.0.0", "8001"]]

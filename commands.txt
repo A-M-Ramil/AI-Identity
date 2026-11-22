@@ -32,6 +32,7 @@ https://swngm-45-248-151-19.run.pinggy-free.link
 
 
 
+ssh -p 443 -R0:127.0.0.1:8031 a.pinggy.io
 
 npx localtunnel --port 8031 --subdomain thesis-verifier
 

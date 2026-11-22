@@ -118,6 +118,45 @@ CRED_CONFIG = {
         "cred_def_id": "BEjT63Lpv7ZuMbrmbUNwqx:3:CL:3329689:tag_7737"
     }
 }
+# ---------------------------------------------------------------------------
+# Chain clock. Delegation expiry is stored in CHAIN time (block.timestamp), which
+# is not the server's wall clock: Anvil only stamps a time when it mines a block,
+# and evm_increaseTime / evm_setNextBlockTimestamp (used by the test rig) shift
+# Anvil's clock forward for good. We learn the offset from every block we mine.
+# ---------------------------------------------------------------------------
+_chain_offset = None  # chain time minus wall time, in seconds
+
+def _calibrate_chain_clock(receipt):
+    global _chain_offset
+    try:
+        ts = w3.eth.get_block(receipt.blockNumber)["timestamp"]
+        _chain_offset = ts - int(time.time())
+    except Exception:
+        pass
+
+def chain_now():
+    """Best estimate of the timestamp the next block would get."""
+    wall = int(time.time())
+    latest = w3.eth.get_block("latest")["timestamp"]
+    if _chain_offset is None:
+        return max(latest, wall)
+    return max(latest, wall + _chain_offset)
+
+NO_BUDGET = 2**256 - 1
+
+def budget_info(owner_addr, agent_addr):
+    """(budget_eth or None, spent_eth, remaining_eth or None) for the current delegation epoch."""
+    deleg = w3.eth.contract(address=DELEGATION_REGISTRY_ADDRESS, abi=DELEGATION_ABI)
+    p = deleg.functions.permissions(owner_addr, agent_addr).call()
+    budget, epoch = p[3], p[4]
+    if budget == NO_BUDGET or not (AGENT_WALLET_ADDRESS and WALLET_ABI):
+        return None, 0.0, None
+    wallet = w3.eth.contract(address=w3.to_checksum_address(AGENT_WALLET_ADDRESS), abi=WALLET_ABI)
+    spent = wallet.functions.spent(agent_addr, epoch).call()
+    remaining = max(0, budget - spent)
+    return (float(w3.from_wei(budget, 'ether')), float(w3.from_wei(spent, 'ether')),
+            float(w3.from_wei(remaining, 'ether')))
+
 def send_tx(tx, private_key=None):
     signed = w3.eth.account.sign_transaction(tx, private_key or ADMIN_PRIVATE_KEY)
     raw = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction", None)
@@ -125,6 +164,7 @@ def send_tx(tx, private_key=None):
         raise Exception(f"Could not extract raw tx bytes, type: {type(signed)}")
     tx_hash = w3.eth.send_raw_transaction(raw)
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+    _calibrate_chain_clock(receipt)
     if receipt.status != 1:
         raise HTTPException(status_code=409,
             detail=f"Reverted on-chain: {w3.to_hex(tx_hash)}")
@@ -289,6 +329,7 @@ class DelegateRequest(BaseModel):
     agent_did: str 
     spend_limit_eth: float
     duration_seconds: int
+    total_budget_eth: float | None = None   # None or <= 0: no total cap (per-trade limit only)
 
 class TradeRequest(BaseModel):
     agent_did: str 
@@ -636,6 +677,86 @@ async def fund_agent(req: FundAgentRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+class FundWalletRequest(BaseModel):
+    amount_eth: float
+
+
+@app.post("/protocol6/fund-wallet")
+async def fund_wallet(req: FundWalletRequest):
+    """Owner deposits ETH into the AgentWallet. This is the money agents spend in P6."""
+    if not AGENT_WALLET_ADDRESS:
+        raise HTTPException(status_code=503, detail="AgentWallet not configured")
+    try:
+        wallet_addr = w3.to_checksum_address(AGENT_WALLET_ADDRESS)
+        async with admin_nonce_lock:
+            nonce = await asyncio.to_thread(w3.eth.get_transaction_count, w3.eth.accounts[0], 'pending')
+            tx = {
+                'to': wallet_addr,
+                'value': w3.to_wei(req.amount_eth, 'ether'),
+                'gas': 60000,  # receive() on a contract needs more than 21000
+                'gasPrice': w3.to_wei('1', 'gwei'),
+                'nonce': nonce,
+            }
+            await send_tx_async(tx)
+        bal = await asyncio.to_thread(w3.eth.get_balance, wallet_addr)
+        return {"status": "success", "wallet_balance_eth": float(w3.from_wei(bal, 'ether'))}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/protocol6/balances/{agent_did}")
+async def p6_balances(agent_did: str):
+    """One call for the live P6 panel: wallet funds, agent gas, policy and what is spendable now."""
+    agent_data = get_agent_key(agent_did)
+    if not agent_data:
+        return {"status": "error", "reason": "Agent not found"}
+
+    def _read():
+        agent_addr = w3.to_checksum_address(agent_data["address"])
+        out = {
+            "status": "success",
+            "agent_eoa": agent_addr,
+            "agent_gas_balance_eth": float(w3.from_wei(w3.eth.get_balance(agent_addr), 'ether')),
+            "wallet_address": None,
+            "wallet_balance_eth": 0.0,
+            "policy": None,
+            "spendable_now_eth": 0.0,
+        }
+        if not (AGENT_WALLET_ADDRESS and WALLET_ABI):
+            return out
+        wallet_addr = w3.to_checksum_address(AGENT_WALLET_ADDRESS)
+        wallet = w3.eth.contract(address=wallet_addr, abi=WALLET_ABI)
+        owner = wallet.functions.owner().call()
+        wallet_wei = w3.eth.get_balance(wallet_addr)
+        deleg = w3.eth.contract(address=DELEGATION_REGISTRY_ADDRESS, abi=DELEGATION_ABI)
+        active, limit_wei, expiry = deleg.functions.permissions(owner, agent_addr).call()[:3]
+        remaining = max(0, expiry - chain_now())
+        usable = active and remaining > 0
+        out.update({
+            "wallet_address": wallet_addr,
+            "wallet_owner": owner,
+            "wallet_balance_eth": float(w3.from_wei(wallet_wei, 'ether')),
+            "policy": {
+                "active": active,
+                "limit_per_tx_eth": float(w3.from_wei(limit_wei, 'ether')),
+                "seconds_remaining": remaining,
+            },
+            "spendable_now_eth": float(w3.from_wei(min(limit_wei, wallet_wei), 'ether')) if usable else 0.0,
+        })
+        b, sp, rem = budget_info(owner, agent_addr)
+        out["policy"].update({"budget_eth": b, "spent_eth": sp, "budget_remaining_eth": rem})
+        if rem is not None and usable:
+            out["spendable_now_eth"] = min(out["spendable_now_eth"], rem)
+        return out
+
+    try:
+        return await asyncio.to_thread(_read)
+    except Exception as e:
+        return {"status": "error", "reason": str(e)}
 
 
 @app.get("/protocol2/get-balance/{agent_did}")
@@ -1087,15 +1208,22 @@ async def inspect_delegation(owner: str, agent_did: str):
         
         limit_eth = w3.from_wei(data[1], 'ether')
         expiry_ts = data[2]
-        time_remaining = expiry_ts - int(datetime.now().timestamp())
-        
+        time_remaining = expiry_ts - chain_now()
+        budget_eth, spent_eth, remaining_eth = budget_info(owner_addr, agent_addr)
+        wallet_eth = (float(w3.from_wei(w3.eth.get_balance(w3.to_checksum_address(AGENT_WALLET_ADDRESS)), 'ether'))
+                      if AGENT_WALLET_ADDRESS else 0.0)
         return {
             "status": "success",
             "on_chain_data": {
                 "active": data[0],
                 "limit_eth": limit_eth,
                 "seconds_remaining": time_remaining if time_remaining > 0 else 0,
-                "agent_eoa": agent_addr
+                "agent_eoa": agent_addr,
+                "budget_eth": budget_eth,          # None = no total cap
+                "spent_eth": spent_eth,
+                "budget_remaining_eth": remaining_eth,
+                "wallet_balance_eth": wallet_eth,
+                "agent_gas_eth": float(w3.from_wei(w3.eth.get_balance(agent_addr), 'ether')),
             }
         }
     except Exception as e:
@@ -1136,11 +1264,12 @@ async def set_delegation(req: DelegateRequest):
 
         async with admin_nonce_lock:
             nonce = await asyncio.to_thread(w3.eth.get_transaction_count, req.owner_address, 'pending')
-            tx = delegation_contract.functions.setPermission(
-                agent_eoa,
-                limit_wei,
-                req.duration_seconds
-            ).build_transaction({
+            if req.total_budget_eth is not None and req.total_budget_eth > 0:
+                fn = delegation_contract.functions.setPermissionWithBudget(
+                    agent_eoa, limit_wei, w3.to_wei(req.total_budget_eth, 'ether'), req.duration_seconds)
+            else:
+                fn = delegation_contract.functions.setPermission(agent_eoa, limit_wei, req.duration_seconds)
+            tx = fn.build_transaction({
                 'from': req.owner_address,
                 'nonce': nonce,
                 'gas': 2000000,
@@ -1175,14 +1304,22 @@ async def execute_trade(req: TradeRequest):
         agent_eoa = w3.to_checksum_address(agent_data["address"])
         amount_wei = w3.to_wei(req.amount_eth, 'ether')
 
+        # Trades must go through AgentWallet, where the registration and delegation
+        # checks are enforced on chain. There is no direct-transfer fallback.
+        if not (AGENT_WALLET_ADDRESS and WALLET_ABI):
+            raise HTTPException(status_code=503,
+                detail="AgentWallet not configured: refusing to trade outside on-chain policy")
+
         def _check_and_execute_sync():
             delegation_contract = w3.eth.contract(address=DELEGATION_REGISTRY_ADDRESS, abi=DELEGATION_ABI)
-            owner_address = w3.eth.accounts[0]
+            wallet_contract = w3.eth.contract(address=w3.to_checksum_address(AGENT_WALLET_ADDRESS), abi=WALLET_ABI)
+            # Pre-flight uses the wallet's real owner, the same one the contract checks.
+            owner_address = wallet_contract.functions.owner().call()
 
             # 1. Pre-flight Policy Check
             perm = delegation_contract.functions.permissions(owner_address, agent_eoa).call()
             is_active, limit, expiry = perm[0], perm[1], perm[2]
-            current_time = w3.eth.get_block('latest')['timestamp']
+            current_time = chain_now()
 
             if not is_active:
                 return {"status": "denied", "reason": "Delegation revoked"}
@@ -1190,33 +1327,33 @@ async def execute_trade(req: TradeRequest):
                 return {"status": "denied", "reason": "Policy Expired"}
             if amount_wei > limit:
                 return {"status": "denied", "reason": f"Amount ({req.amount_eth}) Exceeds Limit ({w3.from_wei(limit,'ether')})"}
+            budget_eth, spent_eth, remaining_eth = budget_info(owner_address, agent_eoa)
+            if remaining_eth is not None and req.amount_eth > remaining_eth + 1e-12:
+                return {"status": "denied",
+                        "reason": f"Budget Exhausted ({remaining_eth} of {budget_eth} ETH left)"}
+            wallet_wei = w3.eth.get_balance(w3.to_checksum_address(AGENT_WALLET_ADDRESS))
+            if amount_wei > wallet_wei:
+                return {"status": "denied",
+                        "reason": f"Insufficient wallet funds ({w3.from_wei(wallet_wei, 'ether')} ETH left)",
+                        "wallet_balance_eth": float(w3.from_wei(wallet_wei, 'ether'))}
 
-            # 2. Execution (Via AgentWallet.sol if configured, else direct EOA transfer)
+            # 2. Execution, always via AgentWallet.executeTrade (on-chain checks)
             nonce = w3.eth.get_transaction_count(agent_eoa, 'pending')
             burn_addr = w3.to_checksum_address("0x000000000000000000000000000000000000dEaD")
-
-            if AGENT_WALLET_ADDRESS and WALLET_ABI:
-                wallet_contract = w3.eth.contract(address=w3.to_checksum_address(AGENT_WALLET_ADDRESS), abi=WALLET_ABI)
-                tx = wallet_contract.functions.executeTrade(burn_addr, amount_wei).build_transaction({
-                    'from': agent_eoa,
-                    'nonce': nonce,
-                    'gas': 150000,
-                    'gasPrice': w3.to_wei('1', 'gwei')
-                })
-            else:
-                tx = {
-                    'to': burn_addr,
-                    'value': amount_wei,
-                    'gas': 21000,
-                    'gasPrice': w3.to_wei('1', 'gwei'),
-                    'nonce': nonce,
-                }
+            tx = wallet_contract.functions.executeTrade(burn_addr, amount_wei).build_transaction({
+                'from': agent_eoa,
+                'nonce': nonce,
+                'gas': 150000,
+                'gasPrice': w3.to_wei('1', 'gwei')
+            })
 
             tx_hash, receipt = send_tx(tx, agent_private_key)
             return {
                 "status": "success",
                 "tx_hash": w3.to_hex(tx_hash),
-                "gas_used": receipt.gasUsed
+                "gas_used": receipt.gasUsed,
+                "wallet_balance_eth": float(w3.from_wei(
+                    w3.eth.get_balance(w3.to_checksum_address(AGENT_WALLET_ADDRESS)), 'ether')),
             }
 
         # Run inside worker thread so concurrent agents execute in parallel!

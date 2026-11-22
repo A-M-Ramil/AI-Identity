@@ -795,5 +795,86 @@
       "ver": "v2.1.5",
       "ipfs_cid": "QmcbdP74HWU7TtuNaJ3Dcz9e7WBxYsGBAJHXyjmyhL6wo2"
     }
+  },
+  "S79uSmhRAkqZAcrn598KPL": {
+    "private_key": "01bd414295dccc76e11efdd851cb91c381329b9b1027bff7fda58dc3cb96bddb",
+    "address": "0xf84C0d616de3685F460879806757B8e1CB4E6378",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmbjN2BtM3yHkbEMZFKuGiuzFxBU7ryPvKfKEJyTU7W4oi"
+    }
+  },
+  "HxFdUxj9UNQ7eRqy73ADG": {
+    "private_key": "5cab73184e83280b1ff229c4d4a6536bd39e72afb2f88489ed1eda0c8dab8ea5",
+    "address": "0x54CB7C2B5d98D2d4fEAEae1AEaC9c580EA38C18f",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmTxc57tUDw4skyPieQLNdA6bDBPtdjuXeVfqbzazGtfh9"
+    }
+  },
+  "GfPoVe4GvGy2RznviSUpA8": {
+    "private_key": "e35dd066530334d6cdcdd74bb9449df01e064ba22e354faf770b9933e5821260",
+    "address": "0xe43F9Bb8689cA2DaBC8989fD92CfAd4657Da6e8C",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmNfhpwDzNsC6KRPuuH1tos7nHKzFLZ7EfEzSAgGU6E38v"
+    }
+  },
+  "EDnK57m1UvEvYs94EpXwzu": {
+    "private_key": "bdae4bb9f8c1b78699200304757163d737551e07e6b7ac330676ba24dfa1b51f",
+    "address": "0x2A547a746aBd4dB9aBa5Ff936C7891B4A63fF425",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmUWDcqezY96pe2hd3h2PCUb7adt7QZ2WtCtRHEueUp4nT"
+    }
+  },
+  "5wsjSs8SeauT16xWDY5kTy": {
+    "private_key": "6cb12531fa286f41abfbc5c790eaea4172bda53c3e2b9b8702295b1ec7e15608",
+    "address": "0x60975a0d5682c4917848b28FCCe8de24ABeebDe3",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmQYh5jmNJD4hosqotCbEdg1o1ZXDjgY9RDJqcr28ymyT4"
+    }
+  },
+  "Seg5bMhRyGCQRxh41UBUCR": {
+    "private_key": "31c6a8f03b59443ebe1bcb4c97dd4b372590a7982559babb8a470d4d6aa445f4",
+    "address": "0xc0AA3a24184739759c8C5258a09aD1C74dA36419",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmecvEDUL3VfwCR28xEkqtTU3NnFvtTQM2xNXKf9SRMChk"
+    }
+  },
+  "DUjAv2bG4umnuv6njHAdBx": {
+    "private_key": "78b3841e55996f9a88dd73abe334eada082eba6fe643057877b34a2fe89e63a2",
+    "address": "0xe39beC996628D0e83C4422D8751720447F7eD025",
+    "layer_a": {
+      "arch": "Transformer-6Bqa",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmQd1Zu7DRLCECUqeiBC1fkEUAxLd6C4djX8HoyYzs26Ur"
+    }
+  },
+  "gy38SZfzb6NNKFk3UcMXN": {
+    "private_key": "a042dc60b93f876228f6de2ed947df91c18197b1b8c2ae809aff1507d2a0f9bc",
+    "address": "0x6b263BEF40B9e9B610452860Dd7f0d1eA1e27E81",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmYYMc2sWGrrMEVHh9HM91VS4Y5NoVrnCHmad5HRRkeEQs"
+    }
+  },
+  "M1XPS6txbse5DJSYxk6E7e": {
+    "private_key": "37774566c8126063667e283c693f91d96ac9bc283d473d3c55ee234bd3fa0dae",
+    "address": "0x4133124F45E71050EC0126384269D583CC11477c",
+    "layer_a": {
+      "arch": "Transformer-6B",
+      "ver": "v2.1.5",
+      "ipfs_cid": "QmNeg7ZeJD9A1WyZUqqxWLSY6q41P1GhJEEJKhYCEDFE19"
+    }
   }
 }

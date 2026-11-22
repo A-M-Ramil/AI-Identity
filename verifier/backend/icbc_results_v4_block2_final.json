@@ -1,0 +1,385 @@
+{
+  "environment": {
+    "os": "Linux 6.6.87.2-microsoft-standard-WSL2 (x86_64)",
+    "cpu": "AMD Ryzen 5 5600 6-Core Processor",
+    "python": "3.12.3",
+    "web3py": "7.14.0",
+    "anvil": "anvil 0.2.0 (10f1402 2024-05-25T00:17:06.450190017Z)",
+    "solc": "0.8.25+commit.b61c2a91",
+    "evm_target": "paris",
+    "acapy": "1.2.0",
+    "kubo": "0.39.0",
+    "chain_mode": "automine",
+    "anvil_automine": false,
+    "scope": "single machine, localhost, WAN latency excluded",
+    "receipt_poll_ms": 5.0,
+    "client_threads": 64
+  },
+  "deployment_gas": {
+    "DIDRegistry": 429737,
+    "AgentRegistry": 738975,
+    "CredentialRegistry": 518287,
+    "DelegationRegistry": 352260,
+    "AgentWallet": 509498
+  },
+  "gas_profile": [
+    {
+      "op": "P1 registerDID",
+      "gas": 158156,
+      "note": ""
+    },
+    {
+      "op": "P2 registerAgent (owner's 1st agent)",
+      "gas": 240177,
+      "note": "new array slot + sig check"
+    },
+    {
+      "op": "P2 registerAgent (owner's 2nd+ agent)",
+      "gas": 223069,
+      "note": "sig check"
+    },
+    {
+      "op": "P2 deactivateAgent",
+      "gas": 33349,
+      "note": ""
+    },
+    {
+      "op": "P3 issueCredential",
+      "gas": 227953,
+      "note": ""
+    },
+    {
+      "op": "P5 revokeCredential",
+      "gas": 47961,
+      "note": ""
+    },
+    {
+      "op": "P6 setPermission (fresh agent)",
+      "gas": 137558,
+      "note": "new storage slots"
+    },
+    {
+      "op": "P6 setPermission (update existing)",
+      "gas": 43658,
+      "note": "slot rewrite"
+    },
+    {
+      "op": "P6 revokePermission",
+      "gas": 28940,
+      "note": ""
+    },
+    {
+      "op": "P6 executeTrade (new recipient account)",
+      "gas": 97188,
+      "note": "includes new-account cost"
+    },
+    {
+      "op": "P6 executeTrade (burn addr, 1st call)",
+      "gas": 96972,
+      "note": "may include new-account cost"
+    },
+    {
+      "op": "P6 executeTrade (burn addr, steady)",
+      "gas": 71972,
+      "note": ""
+    },
+    {
+      "op": "P6 executeTrade (budgeted, 1st in epoch)",
+      "gas": 94467,
+      "note": "new spent slot"
+    },
+    {
+      "op": "P6 executeTrade (budgeted, steady)",
+      "gas": 77367,
+      "note": "spent slot update"
+    }
+  ],
+  "security": [
+    {
+      "scenario": "S1  Non-issuer revokes credential",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: Not authorized issuer', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000154e6f7420617574686f72697a6564206973737565720000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S2  Non-issuer issues credential",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: Not authorized issuer', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000154e6f7420617574686f72697a6564206973737565720000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S3  Register agent under victim's owner DID",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: Caller does not own ownerDID', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001c43616c6c657220646f6573206e6f74206f776e206f776e657244494400000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S3b Re-register existing agent DID (overwrite)",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: Agent DID already exists!', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000194167656e742044494420616c7265616479206578697374732100000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S4  Revoked credential reports Revoked",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "status=Revoked",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S5  Re-issue same credID to un-revoke",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: Credential already exists', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001943726564656e7469616c20616c72656164792065786973747300000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S6  Trade after delegation revoked",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: ACCESS DENIED: Delegation Policy Violation', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a4143434553532044454e4945443a2044656c65676174696f6e20506f6c6963792056696f6c6174696f6e00000000000000000000000000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S7  Trade above delegated limit",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: ACCESS DENIED: Delegation Policy Violation', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a4143434553532044454e4945443a2044656c65676174696f6e20506f6c6963792056696f6c6174696f6e00000000000000000000000000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S8  Non-owner revokes another's delegation",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: No active delegation', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000144e6f206163746976652064656c65676174696f6e000000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S9  Trade after delegation expired",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: ACCESS DENIED: Delegation Policy Violation', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a4143434553532044454e4945443a2044656c65676174696f6e20506f6c6963792056696f6c6174696f6e00000000000000000000000000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S10 Delegated but unregistered agent trades",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: AGENT NOT REGISTERED', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000144147454e54204e4f542052454749535445524544000000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S11 Bind agent key without its signature",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: Invalid agent signature', '0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000017496e76616c6964206167656e74207369676e6174757265000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S12 Trade after agent identity deactivated",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: AGENT NOT REGISTERED', '0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000144147454e54204e4f542052454749535445524544000000000000000000000000')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S13 Second DID with a used gov ID (Sybil)",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('0x2e687a78', '0x2e687a78')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S14 Re-register an existing DID (takeover)",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('0x338c38da', '0x338c38da')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S15 Outsider anchors DID, skipping IRM (KYC bypass)",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('0x82b42900', '0x82b42900')",
+      "verdict": "PASS"
+    },
+    {
+      "scenario": "S16 Many small trades exceed total budget",
+      "blocked": 10,
+      "repeats": 10,
+      "control_ok": 10,
+      "observed_reason": "('execution reverted: revert: ACCESS DENIED: Budget Exhausted', '0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001f4143434553532044454e4945443a204275646765742045786861757374656400')",
+      "verdict": "PASS"
+    }
+  ],
+  "latency": {
+    "P1_registerDID": {
+      "gas_mean": 158164,
+      "acapy_ms": 13.41145979998449,
+      "ipfs_ms": 18.739752033328234,
+      "chain_ms": 1968.368531033305,
+      "total_ms": {
+        "n": 30,
+        "mean": 2000.5215649666297,
+        "median": 2000.228750000133,
+        "sd": 3.033849837983837,
+        "p95": 2005.1334070003577
+      }
+    },
+    "P2_registerAgent": {
+      "gas_mean": 240169.13333333333,
+      "acapy_ms": 13.49821740003184,
+      "ipfs_ms": 16.662450566658055,
+      "chain_ms": 1970.2745132666223,
+      "total_ms": {
+        "n": 30,
+        "mean": 2000.4372072333506,
+        "median": 2000.0233889998071,
+        "sd": 2.650836849850603,
+        "p95": 2004.5090399999026
+      }
+    },
+    "P3_issueCred": {
+      "gas_mean": 227958.2,
+      "acapy_ms": 0.0,
+      "ipfs_ms": 17.355671366673658,
+      "chain_ms": 1981.9660717666768,
+      "total_ms": {
+        "n": 30,
+        "mean": 1999.3232133667032,
+        "median": 1999.6217664997857,
+        "sd": 2.331740475444933,
+        "p95": 2002.7681830001711
+      }
+    },
+    "P5_revokeCred": {
+      "gas_mean": 47960.2,
+      "acapy_ms": 0.0,
+      "ipfs_ms": 0.0,
+      "chain_ms": 1999.4928987333121,
+      "total_ms": {
+        "n": 30,
+        "mean": 1999.4928987333121,
+        "median": 1999.4024094999077,
+        "sd": 3.0671365595122766,
+        "p95": 2004.2765190000864
+      }
+    },
+    "P6_setPermission": {
+      "gas_mean": 137557.6,
+      "acapy_ms": 0.0,
+      "ipfs_ms": 0.0,
+      "chain_ms": 2001.02466899995,
+      "total_ms": {
+        "n": 30,
+        "mean": 2001.02466899995,
+        "median": 2002.419986500172,
+        "sd": 2.7334753941926277,
+        "p95": 2004.2711390001386
+      }
+    },
+    "P6_executeTrade": {
+      "gas_mean": 71972,
+      "acapy_ms": 0.0,
+      "ipfs_ms": 0.0,
+      "chain_ms": 1999.2101471333324,
+      "total_ms": {
+        "n": 30,
+        "mean": 1999.2101471333324,
+        "median": 1999.4037124999977,
+        "sd": 2.753032088093012,
+        "p95": 2003.3850240001811
+      }
+    }
+  },
+  "scaling_direct": {
+    "5": {
+      "tps": {
+        "n": 10,
+        "mean": 2.5003373742064903,
+        "median": 2.5008036486348546,
+        "sd": 0.0028865650757175162,
+        "p95": 2.504023473681477
+      },
+      "latency_ms": {
+        "n": 50,
+        "mean": 1996.773711939968,
+        "median": 1996.314322499984,
+        "sd": 2.8339094374097913,
+        "p95": 2001.6262059998553
+      },
+      "failures": 0
+    },
+    "10": {
+      "tps": {
+        "n": 10,
+        "mean": 4.998369667611825,
+        "median": 4.996741335713217,
+        "sd": 0.014797672971821094,
+        "p95": 5.02145121023667
+      },
+      "latency_ms": {
+        "n": 100,
+        "mean": 1993.3692011499988,
+        "median": 1994.1871129999527,
+        "sd": 7.642619718599828,
+        "p95": 2006.7431299999043
+      },
+      "failures": 0
+    },
+    "25": {
+      "tps": {
+        "n": 10,
+        "mean": 12.486454248648858,
+        "median": 12.493180265974596,
+        "sd": 0.04978638294775021,
+        "p95": 12.549857351668084
+      },
+      "latency_ms": {
+        "n": 250,
+        "mean": 1975.3325843999792,
+        "median": 1977.954931000113,
+        "sd": 19.269886214881677,
+        "p95": 2004.132256000048
+      },
+      "failures": 0
+    },
+    "50": {
+      "tps": {
+        "n": 10,
+        "mean": 24.969338282830325,
+        "median": 24.966939561404523,
+        "sd": 0.17719168192627435,
+        "p95": 25.26915269958133
+      },
+      "latency_ms": {
+        "n": 500,
+        "mean": 1920.8288580219996,
+        "median": 1926.462586000298,
+        "sd": 56.60201680573387,
+        "p95": 1999.3218569998135
+      },
+      "failures": 0
+    }
+  }
+}

@@ -22,6 +22,7 @@ Usage examples:
 """
 import argparse
 import asyncio
+import concurrent.futures
 import hashlib
 import json
 import platform
@@ -71,6 +72,19 @@ DEAD = Web3.to_checksum_address("0x000000000000000000000000000000000000dEaD")
 
 w3 = Web3(Web3.HTTPProvider(ANVIL_RPC_URL))
 assert w3.is_connected(), "Start Anvil first (e.g. `anvil`)"
+
+# Measurement fidelity: web3.py polls for receipts every 100 ms by default, which
+# floors every measured latency at ~100 ms. Poll every 5 ms instead.
+RECEIPT_POLL_S = 0.005
+CLIENT_THREADS = 64     # default asyncio pool (~16) capped concurrent submissions
+_orig_wait = w3.eth.wait_for_transaction_receipt
+
+
+def _wait_fast(tx_hash, timeout=120, poll_latency=RECEIPT_POLL_S):
+    return _orig_wait(tx_hash, timeout=timeout, poll_latency=poll_latency)
+
+
+w3.eth.wait_for_transaction_receipt = _wait_fast
 
 OWNER = w3.eth.accounts[0]       # human owner AND authorized issuer
 ATTACKER = w3.eth.accounts[1]    # unauthorized EOA
@@ -257,6 +271,8 @@ async def environment_report(label):
         "chain_mode": label,
         "anvil_automine": automine,
         "scope": "single machine, localhost, WAN latency excluded",
+        "receipt_poll_ms": RECEIPT_POLL_S * 1000,
+        "client_threads": CLIENT_THREADS,
     }
     for k, v in env.items():
         print(f"  {k:12s}: {v}")
@@ -808,14 +824,18 @@ async def main():
     ap.add_argument("--repeats", type=int, default=5, help="repeats for scaling runs and security scenarios")
     ap.add_argument("--label", default="automine", help="free text describing Anvil mining mode, e.g. 'block-time=2s'")
     ap.add_argument("--skip-latency", action="store_true")
+    ap.add_argument("--skip-security", action="store_true")
     ap.add_argument("--api", action="store_true", help="also run API-path scaling against the live verifier")
     ap.add_argument("--owner-did", default="8jMaEBx4cqXoXtJUW5PVnc")
     args = ap.parse_args()
+    asyncio.get_running_loop().set_default_executor(
+        concurrent.futures.ThreadPoolExecutor(max_workers=CLIENT_THREADS))
 
     await environment_report(args.label)
     did_reg, agent_reg, cred_reg, deleg_reg, wallet = deploy_all()
     gas_profile(did_reg, agent_reg, cred_reg, deleg_reg, wallet)
-    security_scenarios(did_reg, agent_reg, cred_reg, deleg_reg, wallet, args.repeats)
+    if not args.skip_security:
+        security_scenarios(did_reg, agent_reg, cred_reg, deleg_reg, wallet, args.repeats)
     if not args.skip_latency:
         await latency_breakdown(did_reg, agent_reg, cred_reg, deleg_reg, wallet, args.n, args.warmup)
     await direct_scaling(deleg_reg, wallet, agent_reg, args.repeats)

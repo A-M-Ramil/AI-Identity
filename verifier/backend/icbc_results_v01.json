@@ -1,0 +1,237 @@
+{
+  "environment": {
+    "os": "Linux 6.6.87.2-microsoft-standard-WSL2 (x86_64)",
+    "cpu": "AMD Ryzen 5 5600 6-Core Processor",
+    "python": "3.12.3",
+    "web3py": "7.14.0",
+    "anvil": "anvil 0.2.0 (10f1402 2024-05-25T00:17:06.450190017Z)",
+    "solc": "0.8.25+commit.b61c2a91",
+    "evm_target": "paris",
+    "acapy": "1.2.0",
+    "kubo": "0.39.0",
+    "chain_mode": "automine",
+    "anvil_automine": true,
+    "scope": "single machine, localhost, WAN latency excluded",
+    "receipt_poll_ms": 5.0,
+    "client_threads": 64
+  },
+  "deployment_gas": {
+    "DIDRegistry": 398557,
+    "AgentRegistry": 738975,
+    "CredentialRegistry": 518287,
+    "DelegationRegistry": 288051,
+    "AgentWallet": 330929
+  },
+  "gas_profile": [
+    {
+      "op": "P1 registerDID",
+      "gas": 158116,
+      "note": ""
+    },
+    {
+      "op": "P2 registerAgent (owner's 1st agent)",
+      "gas": 240155,
+      "note": "new array slot + sig check"
+    },
+    {
+      "op": "P2 registerAgent (owner's 2nd+ agent)",
+      "gas": 223047,
+      "note": "sig check"
+    },
+    {
+      "op": "P2 deactivateAgent",
+      "gas": 33327,
+      "note": ""
+    },
+    {
+      "op": "P3 issueCredential",
+      "gas": 227953,
+      "note": ""
+    },
+    {
+      "op": "P5 revokeCredential",
+      "gas": 47961,
+      "note": ""
+    },
+    {
+      "op": "P6 setPermission (fresh agent)",
+      "gas": 91044,
+      "note": "new storage slots"
+    },
+    {
+      "op": "P6 setPermission (update existing)",
+      "gas": 34144,
+      "note": "slot rewrite"
+    },
+    {
+      "op": "P6 revokePermission",
+      "gas": 23930,
+      "note": ""
+    },
+    {
+      "op": "P6 executeTrade (new recipient account)",
+      "gas": 90751,
+      "note": "includes new-account cost"
+    },
+    {
+      "op": "P6 executeTrade (burn addr, 1st call)",
+      "gas": 90535,
+      "note": "may include new-account cost"
+    },
+    {
+      "op": "P6 executeTrade (burn addr, steady)",
+      "gas": 65535,
+      "note": ""
+    }
+  ],
+  "latency": {
+    "P1_registerDID": {
+      "gas_mean": 158119.2,
+      "acapy_ms": 15.19289463297658,
+      "ipfs_ms": 15.790181466703265,
+      "chain_ms": 13.583282266699825,
+      "total_ms": {
+        "n": 30,
+        "mean": 44.56836090042392,
+        "median": 43.32334699938656,
+        "sd": 8.61776918533644,
+        "p95": 63.87412800177117
+      }
+    },
+    "P2_registerAgent": {
+      "gas_mean": 240146.73333333334,
+      "acapy_ms": 13.579781066315869,
+      "ipfs_ms": 14.477167100388519,
+      "chain_ms": 27.864158333128824,
+      "total_ms": {
+        "n": 30,
+        "mean": 55.92315886666862,
+        "median": 54.45117349881912,
+        "sd": 6.4076288947549065,
+        "p95": 67.93213099808781
+      }
+    },
+    "P3_issueCred": {
+      "gas_mean": 227957.8,
+      "acapy_ms": 0.0,
+      "ipfs_ms": 15.773425266888808,
+      "chain_ms": 13.732556100027674,
+      "total_ms": {
+        "n": 30,
+        "mean": 29.50737806689479,
+        "median": 28.472744501414127,
+        "sd": 4.213109925008809,
+        "p95": 38.18341399892233
+      }
+    },
+    "P5_revokeCred": {
+      "gas_mean": 47959.4,
+      "acapy_ms": 0.0,
+      "ipfs_ms": 0.0,
+      "chain_ms": 12.649857133267991,
+      "total_ms": {
+        "n": 30,
+        "mean": 12.649857133267991,
+        "median": 12.365414999294444,
+        "sd": 1.8562170699224783,
+        "p95": 16.01265299905208
+      }
+    },
+    "P6_setPermission": {
+      "gas_mean": 91042.8,
+      "acapy_ms": 0.0,
+      "ipfs_ms": 0.0,
+      "chain_ms": 16.196900366655125,
+      "total_ms": {
+        "n": 30,
+        "mean": 16.196900366655125,
+        "median": 15.907327500826796,
+        "sd": 3.0112518124823593,
+        "p95": 22.294434002105845
+      }
+    },
+    "P6_executeTrade": {
+      "gas_mean": 65535,
+      "acapy_ms": 0.0,
+      "ipfs_ms": 0.0,
+      "chain_ms": 8.613851500073602,
+      "total_ms": {
+        "n": 30,
+        "mean": 8.613851500073602,
+        "median": 7.252356001117732,
+        "sd": 3.652038253182724,
+        "p95": 14.044322000700049
+      }
+    }
+  },
+  "scaling_direct": {
+    "5": {
+      "tps": {
+        "n": 10,
+        "mean": 87.23692106995917,
+        "median": 86.67343782986086,
+        "sd": 4.6531027494565,
+        "p95": 98.27937579467175
+      },
+      "latency_ms": {
+        "n": 50,
+        "mean": 47.97719305985083,
+        "median": 48.758523998913006,
+        "sd": 6.654424055770375,
+        "p95": 58.335581998107955
+      },
+      "failures": 0
+    },
+    "10": {
+      "tps": {
+        "n": 10,
+        "mean": 89.87612019711811,
+        "median": 90.7150666384349,
+        "sd": 5.411036618876733,
+        "p95": 95.77774445163709
+      },
+      "latency_ms": {
+        "n": 100,
+        "mean": 90.55771910025214,
+        "median": 94.2637369989825,
+        "sd": 16.013524563980376,
+        "p95": 112.59644600067986
+      },
+      "failures": 0
+    },
+    "25": {
+      "tps": {
+        "n": 10,
+        "mean": 86.1542882687236,
+        "median": 87.01167372028056,
+        "sd": 7.1334942648208655,
+        "p95": 96.43623109653367
+      },
+      "latency_ms": {
+        "n": 250,
+        "mean": 196.73733647585323,
+        "median": 194.25036550092045,
+        "sd": 55.548034844315026,
+        "p95": 281.59327400135226
+      },
+      "failures": 0
+    },
+    "50": {
+      "tps": {
+        "n": 10,
+        "mean": 90.94790777840983,
+        "median": 91.9291827005251,
+        "sd": 4.112760523210369,
+        "p95": 96.59488073230789
+      },
+      "latency_ms": {
+        "n": 500,
+        "mean": 334.07485171800363,
+        "median": 338.28855600040697,
+        "sd": 108.88899342434723,
+        "p95": 517.0416340006341
+      },
+      "failures": 0
+    }
+  }
+}
